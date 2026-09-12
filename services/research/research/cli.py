@@ -35,11 +35,11 @@ def ingest(
     since: datetime = typer.Option(None, help="ISO date to start from on first run"),
 ) -> None:
     """Fetch historical klines into the candles table (resumes from the last stored candle)."""
+    from datetime import timedelta, timezone
+
     from .config import load_config
     from .ingest import ingest as run_ingest
     from .settings import settings
-
-    from datetime import timedelta, timezone
 
     cfg = load_config(settings.strategy_config_path)
     symbols = [symbol] if symbol else cfg.symbols

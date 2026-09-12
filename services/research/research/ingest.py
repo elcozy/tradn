@@ -51,6 +51,10 @@ def batch_to_frame(batch: list[list], cutoff_ms: int) -> pd.DataFrame:
     return df
 
 
+def _to_ms(dt: datetime) -> int:
+    return int(dt.replace(tzinfo=dt.tzinfo or timezone.utc).timestamp() * 1000)
+
+
 def ingest(
     symbol: str,
     timeframe: str,
@@ -59,23 +63,38 @@ def ingest(
     default_lookback: timedelta = timedelta(days=365),
     sleep: bool = True,
 ) -> int:
-    """Fetch klines from `since` (or resume after the last stored candle) up to the last closed one."""
+    """Fetch klines up to the last closed candle.
+
+    Fills two gaps so a partially-populated table (e.g. the engine's 500-bar bootstrap) is completed:
+      * backwards, from `since` up to the earliest stored candle
+      * forwards, from the last stored candle to now
+    """
     ex = exchange or make_exchange()
-    market = to_ccxt_symbol(symbol)
     tf_ms = TIMEFRAME_MS[timeframe]
+    total = 0
+
+    first = db.first_candle_time(symbol, timeframe)
+    want_from_ms = _to_ms(since) if since is not None else int((datetime.now(timezone.utc) - default_lookback).timestamp() * 1000)
+    if first is not None and want_from_ms < int(first.timestamp() * 1000) - tf_ms:
+        total += _fetch_range(ex, symbol, timeframe, want_from_ms, int(first.timestamp() * 1000) - tf_ms, sleep)
 
     last = db.last_candle_time(symbol, timeframe)
-    if last is not None:
-        start_ms = int(last.timestamp() * 1000)  # re-fetch the last candle in case it was partial
-    elif since is not None:
-        start_ms = int(since.replace(tzinfo=since.tzinfo or timezone.utc).timestamp() * 1000)
-    else:
-        start_ms = int((datetime.now(timezone.utc) - default_lookback).timestamp() * 1000)
-
+    # re-fetch the last stored candle in case it was partial; with no data at all, start at want_from_ms
+    start_ms = int(last.timestamp() * 1000) if last is not None else want_from_ms
     now_ms = ex.milliseconds()
     last_closed_open_ms = (now_ms // tf_ms) * tf_ms - tf_ms  # open time of the most recent CLOSED candle
+    return total + _fetch_range(ex, symbol, timeframe, start_ms, last_closed_open_ms, sleep)
+
+
+def _fetch_range(ex: Exchange, symbol: str, timeframe: str, start_ms: int, end_ms: int, sleep: bool) -> int:
+    """Page through [start_ms, end_ms] (candle open times, inclusive) and upsert. Returns rows written."""
+    market = to_ccxt_symbol(symbol)
+    tf_ms = TIMEFRAME_MS[timeframe]
     total = 0
-    console.log(f"[bold]{symbol} {timeframe}[/] from {pd.Timestamp(start_ms, unit='ms', tz='UTC')}")
+    if start_ms > end_ms:
+        return 0
+    console.log(f"[bold]{symbol} {timeframe}[/] {pd.Timestamp(start_ms, unit='ms', tz='UTC')} → {pd.Timestamp(end_ms, unit='ms', tz='UTC')}")
+    last_closed_open_ms = end_ms
     while start_ms <= last_closed_open_ms:
         batch = ex.fetch_ohlcv(market, timeframe, since=start_ms, limit=1000)
         if not batch:

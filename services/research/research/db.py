@@ -69,6 +69,15 @@ def upsert_candles(df: pd.DataFrame, symbol: str, timeframe: str) -> int:
     return len(rows)
 
 
+def first_candle_time(symbol: str, timeframe: str) -> datetime | None:
+    with engine().connect() as conn:
+        row = conn.execute(
+            text("SELECT min(open_time) FROM candles WHERE symbol=:s AND timeframe=:t AND closed"),
+            {"s": symbol, "t": timeframe},
+        ).scalar()
+    return row.astimezone(timezone.utc) if row else None
+
+
 def last_candle_time(symbol: str, timeframe: str) -> datetime | None:
     with engine().connect() as conn:
         row = conn.execute(

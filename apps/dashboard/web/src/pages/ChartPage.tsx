@@ -1,6 +1,7 @@
 import { ColorType, CrosshairMode, LineStyle, createChart, type IChartApi, type IPriceLine, type ISeriesApi, type LogicalRange, type SeriesMarker, type Time, type UTCTimestamp } from "lightweight-charts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fmt, get, subscribeLive, useLive, type Candle, type Config, type PositionRow, type SignalRow } from "../api";
+import { bollinger } from "../lib/indicators";
 import { TF_SECONDS, outcomeColor, signalCandleTime, trailPath } from "../lib/trail";
 
 interface Props { config: Config; tick: number; selectedSignal: string | null; onSelectSignal: (id: string | null) => void }
@@ -18,10 +19,14 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
   const [positions, setPositions] = useState<PositionRow[]>([]);
   const [detail, setDetail] = useState<{ signal: SignalRow; position: PositionRow | null; events: any[] } | null>(null);
   const [lastLive, setLastLive] = useState<Candle | null>(null);
+  const [showBb, setShowBb] = useState(() => localStorage.getItem("chart.bb") === "1");
+  const [bbLen, setBbLen] = useState(() => Number(localStorage.getItem("chart.bbLen") ?? 20));
+  const [bbK, setBbK] = useState(() => Number(localStorage.getItem("chart.bbK") ?? 2));
   const box = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | null>(null);
   const series = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const trail = useRef<ISeriesApi<"Line"> | null>(null);
+  const bb = useRef<{ upper: ISeriesApi<"Line">; mid: ISeriesApi<"Line">; lower: ISeriesApi<"Line"> } | null>(null);
   const lines = useRef<IPriceLine[]>([]);
   const candlesRef = useRef<Candle[]>([]);
   candlesRef.current = candles;
@@ -103,6 +108,9 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
     });
     series.current = c.addCandlestickSeries({ upColor: "#22c55e", downColor: "#ef4444", wickUpColor: "#22c55e", wickDownColor: "#ef4444", borderVisible: false });
     trail.current = c.addLineSeries({ color: "#f59e0b", lineWidth: 2, lineStyle: LineStyle.Dotted, priceLineVisible: false, lastValueVisible: false });
+    const band = (color: string, style: LineStyle) =>
+      c.addLineSeries({ color, lineWidth: 1, lineStyle: style, priceLineVisible: false, lastValueVisible: false, crosshairMarkerVisible: false });
+    bb.current = { upper: band("#8b5cf6", LineStyle.Solid), mid: band("#8b5cf6", LineStyle.Dashed), lower: band("#8b5cf6", LineStyle.Solid) };
     chart.current = c;
     return () => c.remove();
   }, []);
@@ -116,6 +124,28 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
     c.timeScale().subscribeVisibleLogicalRangeChange(h);
     return () => c.timeScale().unsubscribeVisibleLogicalRangeChange(h);
   }, [loadOlder]);
+
+  // Bollinger Bands, recomputed whenever candles or settings change (including the live bar).
+  useEffect(() => {
+    const b = bb.current;
+    if (!b) return;
+    if (!showBb) {
+      b.upper.setData([]);
+      b.mid.setData([]);
+      b.lower.setData([]);
+      return;
+    }
+    const pts = bollinger(candles, bbLen, bbK);
+    b.upper.setData(pts.map((p) => ({ time: p.time as UTCTimestamp, value: p.upper })));
+    b.mid.setData(pts.map((p) => ({ time: p.time as UTCTimestamp, value: p.mid })));
+    b.lower.setData(pts.map((p) => ({ time: p.time as UTCTimestamp, value: p.lower })));
+  }, [candles, showBb, bbLen, bbK]);
+
+  useEffect(() => {
+    localStorage.setItem("chart.bb", showBb ? "1" : "0");
+    localStorage.setItem("chart.bbLen", String(bbLen));
+    localStorage.setItem("chart.bbK", String(bbK));
+  }, [showBb, bbLen, bbK]);
 
   const markers = useMemo<SeriesMarker<Time>[]>(
     () =>
@@ -187,6 +217,13 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
           <select value={symbol} onChange={(e) => setSymbol(e.target.value)}>{config.symbols.map((s) => <option key={s}>{s}</option>)}</select>
           <label className="flat">candle</label>
           <select value={tf} onChange={(e) => setTf(e.target.value)}>{tfs.map((t) => <option key={t}>{t}</option>)}</select>
+          <label className="check"><input type="checkbox" checked={showBb} onChange={(e) => setShowBb(e.target.checked)} /> Bollinger</label>
+          {showBb && (
+            <>
+              <input type="number" min={2} max={200} value={bbLen} onChange={(e) => setBbLen(Math.max(2, Number(e.target.value) || 20))} style={{ width: 56 }} title="period" />
+              <input type="number" min={0.5} max={5} step={0.5} value={bbK} onChange={(e) => setBbK(Number(e.target.value) || 2)} style={{ width: 56 }} title="standard deviations" />
+            </>
+          )}
           {selectedSignal && <button className="btn" onClick={() => onSelectSignal(null)}>clear selection</button>}
           <span className="pill">{candles.length} candles{first ? ` since ${new Date(first.time * 1000).toISOString().slice(0, 10)}` : ""} · {signals.length} signals{loadingOlder ? " · loading older…" : exhausted ? " · start of data" : ""}</span>
           {lastLive && <span className="pill on">last {fmt.price(lastLive.close)}</span>}

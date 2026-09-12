@@ -13,7 +13,9 @@ from .synth import candles, resample
 
 @pytest.fixture
 def cfg(repo_root):
-    return load_config(repo_root / "config" / "strategies.yaml")
+    """Repo config narrowed to one strategy instance, so these tests do not depend on the symbol list."""
+    full = load_config(repo_root / "config" / "strategies.yaml")
+    return full.model_copy(update={"strategies": full.strategies[:1], "symbols": [full.strategies[0].symbol]})
 
 
 def test_signal_id_is_deterministic(cfg):

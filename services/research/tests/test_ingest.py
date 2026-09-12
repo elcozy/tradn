@@ -51,6 +51,7 @@ def test_ingest_paginates_and_skips_open_candle(monkeypatch):
     ex = FakeExchange(t0, n + 1, now, page=1000)  # exchange also serves the forming candle
 
     written: list[pd.DataFrame] = []
+    monkeypatch.setattr(ing.db, "first_candle_time", lambda s, t: None)
     monkeypatch.setattr(ing.db, "last_candle_time", lambda s, t: None)
     monkeypatch.setattr(ing.db, "upsert_candles", lambda df, s, t: written.append(df) or len(df))
 
@@ -63,6 +64,28 @@ def test_ingest_paginates_and_skips_open_candle(monkeypatch):
     assert all_rows["open_time"].iloc[-1] == pd.Timestamp(t0 + (n - 1) * tf, unit="ms", tz="UTC")
 
 
+def test_ingest_backfills_before_the_earliest_stored_candle(monkeypatch):
+    """The engine bootstraps recent bars; a later `ingest --since` must fill the history behind them."""
+    tf = TIMEFRAME_MS["15m"]
+    t0 = 1_700_000_000_000 - (1_700_000_000_000 % tf)
+    n = 200
+    now = t0 + n * tf + 1000
+    ex = FakeExchange(t0, n, now)
+    # stored: only the last 20 candles (bootstrap)
+    first = datetime.fromtimestamp((t0 + 180 * tf) / 1000, tz=timezone.utc)
+    last = datetime.fromtimestamp((t0 + 199 * tf) / 1000, tz=timezone.utc)
+    monkeypatch.setattr(ing.db, "first_candle_time", lambda s, t: first)
+    monkeypatch.setattr(ing.db, "last_candle_time", lambda s, t: last)
+    written = []
+    monkeypatch.setattr(ing.db, "upsert_candles", lambda df, s, t: written.append(df) or len(df))
+
+    total = ing.ingest("BTCUSDT", "15m", since=datetime.fromtimestamp(t0 / 1000, tz=timezone.utc), exchange=ex, sleep=False)
+    times = pd.concat(written)["open_time"]
+    assert times.min() == pd.Timestamp(t0, unit="ms", tz="UTC")  # backfilled to `since`
+    assert times.max() == pd.Timestamp(t0 + 199 * tf, unit="ms", tz="UTC")
+    assert total >= 180
+
+
 def test_ingest_resumes_from_last_candle(monkeypatch):
     tf = TIMEFRAME_MS["15m"]
     t0 = 1_700_000_000_000 - (1_700_000_000_000 % tf)
@@ -70,6 +93,7 @@ def test_ingest_resumes_from_last_candle(monkeypatch):
     now = t0 + n * tf + 1000
     ex = FakeExchange(t0, n, now)
     last = datetime.fromtimestamp((t0 + 90 * tf) / 1000, tz=timezone.utc)
+    monkeypatch.setattr(ing.db, "first_candle_time", lambda s, t: datetime.fromtimestamp(t0 / 1000, tz=timezone.utc))
     monkeypatch.setattr(ing.db, "last_candle_time", lambda s, t: last)
     monkeypatch.setattr(ing.db, "upsert_candles", lambda df, s, t: len(df))
 

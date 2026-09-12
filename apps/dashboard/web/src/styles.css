@@ -34,3 +34,5 @@ pre { margin: 0; white-space: pre-wrap; word-break: break-all; color: var(--mute
 .scroll { max-height: 520px; overflow: auto; }
 
 .seg { display: inline-flex; gap: 2px; } .seg .btn { padding: 4px 7px; } .seg .btn.active { border-color: var(--accent); color: var(--text); }
+.check { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); cursor: pointer; }
+.check input { accent-color: #8b5cf6; }
