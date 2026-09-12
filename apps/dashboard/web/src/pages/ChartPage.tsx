@@ -70,10 +70,12 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
     if (m.kind !== "candle" && m.kind !== "live") return;
     if (m.symbol !== symbol) return;
     const step = TF_SECONDS[tf] ?? 900;
+    const stored = config.timeframes;
+    const base = stored.includes(tf) ? tf : stored.filter((b) => step % (TF_SECONDS[b] ?? 1) === 0).sort((a, b) => (TF_SECONDS[b] ?? 0) - (TF_SECONDS[a] ?? 0))[0];
     let k: Candle;
     if (m.tf === tf) k = m.candle;
-    else if (m.tf === "15m" && step > 900 && step % 900 === 0) {
-      // aggregate a 15m update into the current bucket of the displayed timeframe
+    else if (base && m.tf === base && step > (TF_SECONDS[base] ?? 0)) {
+      // aggregate a base-timeframe update into the current bucket of the displayed (resampled) timeframe
       const bucket = m.candle.time - (m.candle.time % step);
       const last = candlesRef.current[candlesRef.current.length - 1];
       const cur = last && last.time === bucket ? last : null;

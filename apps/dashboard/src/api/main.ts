@@ -13,7 +13,7 @@ loadDotenv({ path: resolve(REPO_ROOT, ".env") });
 const log = pino({ level: process.env.LOG_LEVEL ?? "info" });
 
 const cfg = parseYaml(readFileSync(resolve(REPO_ROOT, process.env.STRATEGY_CONFIG ?? "config/strategies.yaml"), "utf8"));
-const timeframes = [...new Set<string>(cfg.strategies.flatMap((s: any) => [s.entry_tf, s.regime_tf, s.range_tf].filter(Boolean)))];
+const timeframes = [...new Set<string>([...cfg.strategies.flatMap((s: any) => [s.entry_tf, s.regime_tf, s.range_tf].filter(Boolean)), ...(cfg.chart_timeframes ?? [])])];
 const sql = postgres(process.env.DATABASE_URL ?? "postgres://trading:trading@localhost:5435/trading", { max: 5, onnotice: () => {} });
 const redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6375");
 const subscriber = new Redis(process.env.REDIS_URL ?? "redis://localhost:6375");

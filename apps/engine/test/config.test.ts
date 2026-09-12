@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
-import { AppConfigSchema, REPO_ROOT, configTimeframes, enabledStrategies, parseAppConfig } from "../src/config.js";
+import { AppConfigSchema, REPO_ROOT, configTimeframes, enabledStrategies, parseAppConfig, strategyTimeframes } from "../src/config.js";
 
 const text = readFileSync(resolve(REPO_ROOT, "config/strategies.yaml"), "utf8");
 const raw = () => parseYaml(text) as Record<string, any>;
@@ -12,7 +12,8 @@ describe("strategy config", () => {
     const cfg = parseAppConfig(text);
     expect(cfg.mode).toBe("shadow");
     expect(enabledStrategies(cfg)[0]?.id).toBe("s1_btc_15m");
-    expect(configTimeframes(cfg)).toEqual(["15m", "1h"]);
+    expect(strategyTimeframes(cfg)).toEqual(["15m", "1h"]);
+    expect(configTimeframes(cfg)).toEqual(["1m", "15m", "1h"]);
   });
   it("rejects an invalid timeframe", () => {
     const r = raw();

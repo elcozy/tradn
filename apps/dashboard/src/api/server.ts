@@ -27,6 +27,8 @@ export interface SubscriberLike {
 
 /** Timeframes the chart can show by resampling the stored base timeframe with time_bucket. */
 export const RESAMPLE: Record<string, { base: string; bucket: string }> = {
+  "3m": { base: "1m", bucket: "3 minutes" },
+  "5m": { base: "1m", bucket: "5 minutes" },
   "30m": { base: "15m", bucket: "30 minutes" },
   "1h": { base: "15m", bucket: "1 hour" },
   "2h": { base: "15m", bucket: "2 hours" },

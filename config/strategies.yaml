@@ -7,6 +7,11 @@ mode: shadow # shadow | paper | testnet | live
 symbols:
   - BTCUSDT
 
+# Extra timeframes streamed and stored only for the dashboard chart (no strategy runs on them).
+# Backfilled for chart_lookback_days on `research ingest`; strategy timeframes are backfilled fully.
+chart_timeframes: [1m]
+chart_lookback_days: 30
+
 strategies:
   - id: s1_btc_15m
     type: sr_bounce

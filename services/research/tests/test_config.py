@@ -8,7 +8,9 @@ def test_repo_config_loads(repo_root):
     cfg = load_config(repo_root / "config" / "strategies.yaml")
     assert cfg.mode == "shadow"
     assert cfg.enabled_strategies[0].id == "s1_btc_15m"
-    assert cfg.timeframes == ["15m", "1h"]
+    assert cfg.strategy_timeframes == ["15m", "1h"]
+    assert cfg.timeframes == ["1m", "15m", "1h"]
+    assert cfg.chart_timeframes == ["1m"]
 
 
 def test_invalid_timeframe_rejected(repo_root):

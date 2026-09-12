@@ -79,6 +79,8 @@ class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     mode: Mode = "shadow"
     symbols: list[str]
+    chart_timeframes: list[Timeframe] = Field(default_factory=list)
+    chart_lookback_days: int = 30
     strategies: list[StrategyInstance]
     regime: RegimeConfig = Field(default_factory=RegimeConfig)
     risk: RiskConfig = Field(default_factory=RiskConfig)
@@ -99,10 +101,15 @@ class AppConfig(BaseModel):
         return [s for s in self.strategies if s.enabled]
 
     @property
-    def timeframes(self) -> list[str]:
+    def strategy_timeframes(self) -> list[str]:
         """Union of every timeframe any strategy needs, fastest first."""
         tfs = {tf for s in self.strategies for tf in (s.entry_tf, s.regime_tf, s.range_tf) if tf}
         return sorted(tfs, key=lambda t: TIMEFRAME_MS[t])
+
+    @property
+    def timeframes(self) -> list[str]:
+        """Strategy timeframes plus chart-only ones, fastest first (what ingest and the engine stream)."""
+        return sorted(set(self.strategy_timeframes) | set(self.chart_timeframes), key=lambda t: TIMEFRAME_MS[t])
 
 
 def load_config(path: Path | str) -> AppConfig:

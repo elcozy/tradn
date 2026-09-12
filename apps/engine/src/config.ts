@@ -60,6 +60,8 @@ export const AppConfigSchema = z
   .object({
     mode: z.enum(["shadow", "paper", "testnet", "live"]).default("shadow"),
     symbols: z.array(z.string()).min(1),
+    chart_timeframes: z.array(Tf).default([]),
+    chart_lookback_days: z.number().int().default(30),
     strategies: z.array(StrategyInstanceSchema),
     regime: z
       .object({
@@ -123,13 +125,19 @@ export function loadAppConfig(env: Env): AppConfig {
 }
 
 /** Union of every timeframe any strategy needs, fastest first. */
-export function configTimeframes(cfg: AppConfig): (typeof TIMEFRAMES)[number][] {
+export function strategyTimeframes(cfg: AppConfig): (typeof TIMEFRAMES)[number][] {
   const set = new Set<(typeof TIMEFRAMES)[number]>();
   for (const s of cfg.strategies) {
     set.add(s.entry_tf);
     set.add(s.regime_tf);
     if (s.range_tf) set.add(s.range_tf);
   }
+  return [...set].sort((a, b) => TIMEFRAME_MS[a] - TIMEFRAME_MS[b]);
+}
+
+/** Strategy timeframes plus chart-only ones: what the engine streams and stores. */
+export function configTimeframes(cfg: AppConfig): (typeof TIMEFRAMES)[number][] {
+  const set = new Set<(typeof TIMEFRAMES)[number]>([...strategyTimeframes(cfg), ...cfg.chart_timeframes]);
   return [...set].sort((a, b) => TIMEFRAME_MS[a] - TIMEFRAME_MS[b]);
 }
 

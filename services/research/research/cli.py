@@ -39,12 +39,18 @@ def ingest(
     from .ingest import ingest as run_ingest
     from .settings import settings
 
+    from datetime import timedelta, timezone
+
     cfg = load_config(settings.strategy_config_path)
     symbols = [symbol] if symbol else cfg.symbols
     tfs = [t.strip() for t in tf.split(",")] if tf else cfg.timeframes
+    chart_only = set(cfg.chart_timeframes) - set(cfg.strategy_timeframes)
     for s in symbols:
         for t in tfs:
-            n = run_ingest(s, t, since=since)
+            start = since
+            if start is None and t in chart_only:
+                start = datetime.now(timezone.utc) - timedelta(days=cfg.chart_lookback_days)
+            n = run_ingest(s, t, since=start)
             console.print(f"[green]{s} {t}: wrote {n} candles[/]")
 
 
