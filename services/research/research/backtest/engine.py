@@ -10,7 +10,7 @@ import pandas as pd
 
 from ..config import AppConfig, StrategyInstance
 from ..exit_policy import Bar, Position, close_manual, open_position, realized_r, step
-from ..strategies.base import SignalDraft, Strategy
+from ..strategies.base import SignalDraft, Strategy, prepare_strategy
 
 
 @dataclass
@@ -78,8 +78,9 @@ def run(
     entry_df: pd.DataFrame,
     regime_df: pd.DataFrame,
     risk_amount: float | None = None,
+    range_df: pd.DataFrame | None = None,
 ) -> BacktestOutput:
-    strategy.prepare(entry_df, regime_df)
+    prepare_strategy(strategy, entry_df, regime_df, range_df)
     e = strategy.entry
     assert e is not None and strategy.regime is not None
     opens, highs, lows, closes = (e[c].to_numpy() for c in ("open", "high", "low", "close"))
@@ -124,9 +125,11 @@ def run(
     for i in range(n):
         if pos is not None:
             bars_in_pos += 1
-            # regime invalidation: a new regime bar became usable at the close of bar i-1
-            new_regime_bar = i > 0 and regime_idx[i] != regime_idx[i - 1] and regime_idx[i] >= 0
-            if new_regime_bar and strategy.invalidated(draft.invalidation_level, float(regime_close[regime_idx[i]])):
+            # regime invalidation: a regime bar that closed at the close of bar i-1 (= this bar's open) is
+            # the earliest one we can act on, so exit at this bar's open. (regime_idx[i] may already include a
+            # regime bar closing together with bar i, but that close is not known until bar i has closed.)
+            new_regime_bar = i > 1 and regime_idx[i - 1] != regime_idx[i - 2] and regime_idx[i - 1] >= 0
+            if new_regime_bar and strategy.invalidated(draft.invalidation_level, float(regime_close[regime_idx[i - 1]])):
                 close_manual(pos, float(opens[i]), "regime")
                 finish(i)
                 continue

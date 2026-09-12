@@ -123,6 +123,69 @@ strategies:
     touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
     max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
   exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+# A second S1 instance on a slower pair of timeframes (1h entries, 4h regime), same params: an instance
+# is config only, no code change.
+- id: s1_btc_1h
+  type: sr_bounce
+  symbol: BTCUSDT
+  entry_tf: 1h
+  regime_tf: 4h
+  enabled: true
+  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5,
+    touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
+    max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+# S2 (indicator confluence): shared regime filter, then RSI crossing back up through rsi_oversold AND a
+# close at/below the lower Bollinger band within the last lookback_bars bars, AND the MACD histogram
+# rising on the current bar. Params, in order:
+#   rsi_len / rsi_oversold    RSI period and the level RSI must cross back UP through
+#   lookback_bars             the RSI cross and the band touch may be up to this many bars old
+#   bb_len / bb_k             Bollinger period and width (in standard deviations)
+#   macd_fast / macd_slow / macd_signal   MACD EMA lengths; histogram must rise on the entry bar
+#   atr_len                   ATR period for the stop (and the exit policy's trailing)
+#   stop_atr_k                stop = entry - stop_atr_k x ATR
+#   r_mult                    target = entry + r_mult x risk (TP1 at +tp1_r)
+#   max_risk_pct              skip if (entry - stop) / entry exceeds this
+#   max_fee_r                 skip if round-trip fees would eat more than this many R
+# exit.max_bars is the time stop (24 x 15m = 6h) when breakeven has not been reached.
+- id: s2_btc_15m
+  type: indicator_confluence
+  symbol: BTCUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {rsi_len: 14, rsi_oversold: 30, lookback_bars: 3, bb_len: 20, bb_k: 2.0, macd_fast: 12, macd_slow: 26, macd_signal: 9,
+    atr_len: 14, stop_atr_k: 1.5, r_mult: 2.0, max_risk_pct: 1.5, max_fee_r: 0.25}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: 24}
+# S3 (range): entries on entry_tf at the bottom of a range measured on range_tf, only while regime_tf is
+# RANGING (low ADX and a squeezed Bollinger width; the trend filter is not applied, the volatility filter
+# and the daily-open window are). Params, in order:
+#   adx_len / adx_max         regime ADX period; ranging when ADX is below adx_max
+#   bb_len / bb_k             regime Bollinger period/width used for the width distribution
+#   bb_width_pct              ranging when the width is in the bottom this % of its trailing distribution ...
+#   bb_width_lookback_days    ... measured over this many days
+#   range_bars                range = highest high / lowest low of the last this many CLOSED range_tf bars
+#   atr_len                   ATR period (range_tf, for the height check and the stop; entry_tf for trailing)
+#   min_range_atr             skip unless the range height is at least this many range_tf ATR
+#   entry_zone_pct            entry when a bullish entry_tf close is in the bottom this % of the range
+#   tp_zone_pct               target at this % of the range height (TP1 is always the midpoint)
+#   stop_atr_k                stop = range low - stop_atr_k x ATR(range_tf)
+#   ladder                    entries per touch; only 1 is implemented (PLAN's optional ladder of 3 is out of scope)
+#   max_risk_pct / min_r      as for S1
+#   max_fee_r                 as for S1 but looser (0.5): mean-reversion stops are tight, so fees are a larger share of R
+# Invalidation: a regime_tf close below the range low closes the remainder (price proxy for "range breaking").
+# exit: no trailing and no target ratchet (mean reversion), no time stop.
+- id: s3_btc_5m
+  type: range
+  symbol: BTCUSDT
+  entry_tf: 5m
+  range_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {adx_len: 14, adx_max: 20, bb_len: 20, bb_k: 2.0, bb_width_pct: 40, bb_width_lookback_days: 30, range_bars: 48,
+    atr_len: 14, min_range_atr: 3.0, entry_zone_pct: 20, tp_zone_pct: 80, stop_atr_k: 0.5, ladder: 1,
+    max_risk_pct: 1.5, min_r: 1.0, max_fee_r: 0.5}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: null}
 regime: {ema_fast: 50, ema_slow: 200, atr_len: 14, atr_pct_min: 0.3, atr_pct_max: 3.0, no_trade_minutes_after_daily_open: 15}
 risk: {per_trade_pct: 1.0, daily_loss_pct: 3.0, max_open: 3, max_per_symbol: 1, consecutive_loss_cooldown: 3, cooldown_minutes: 120,
   notional_cap_pct: 25.0}

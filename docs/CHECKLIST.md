@@ -39,7 +39,7 @@ Tick items as they are done. Every session starts by reading this file. Mileston
 - [x] Engine shadow mode: consumes signals, creates a shadow position, follows live candles with the exit policy, records SL/TP moves, MFE/MAE, bars held, and writes the outcome back to the signal row
 - [x] Telegram: message on signal, TP1, stop, trailing move, close, daily summary; `/status /pause /resume`
 - [x] Heartbeat and no-candle alerts
-- [ ] Run 2 weeks; compare shadow outcomes with a backtest over the same window; note in `DECISIONS.md`
+- [ ] Run 2 weeks; compare shadow outcomes with a backtest over the same window (`research compare --mode shadow`); note in `DECISIONS.md` — soak started 2026-09-12, review ~2026-09-26
 
 ### M4 Dashboard v1
 
@@ -49,22 +49,23 @@ Tick items as they are done. Every session starts by reading this file. Mileston
 
 ### M5 Paper wallet
 
-- [ ] Simulated balance, fees, slippage, position sizing (1% risk), equity snapshots, daily-loss pause, consecutive-loss cooldown
-- [ ] Paper equity curve reproduces shadow R values over the same window
+- [x] Simulated balance, fees, slippage, position sizing (1% risk, step/min-notional from exchangeInfo), equity snapshots (hourly + on close, `v_equity_curve`), daily-loss pause and consecutive-loss cooldown written to `risk_events` + `risk_limit_hit`; Overview shows the equity curve and today vs the daily limit
+- [ ] Paper equity curve reproduces the backtest's R values over the same window — checker built (`research compare --mode paper`, exit 1 on any mismatch); needs a week of paper positions: `pm2 start ecosystem.config.cjs --only engine-paper`
 
 ### M6 Testnet
 
-- [ ] Binance spot adapter (ccxt): market buy, two-OCO protection, cancel/replace, precision filters, idempotent client ids
-- [ ] User data stream + poll fallback; fee-asset-aware sellable qty
-- [ ] Reconciliation against exchange; unprotected-position repair
-- [ ] Kill-mid-position test passed
+- [x] Binance spot adapter (ccxt implicit endpoints): market buy, two-OCO protection, cancel/replace once per candle, precision filters, idempotent client ids, price-constraint and stop-only fallbacks, 3-failure emergency exit
+- [x] User data stream + 60s poll fallback; fee-asset-aware sellable qty
+- [x] Reconciliation on start and every 5 min: unknown orders pause entries, unprotected positions re-protected, balance check
+- [ ] Kill-mid-position test passed — needs `BINANCE_TESTNET_API_KEY/SECRET` in `.env`, then `MODE=testnet pnpm engine` (all of the above is verified against a fake exchange in `apps/engine/test/`)
 
 ### M7 Live small
 
-- [ ] Live keys (no withdrawal, IP-restricted); `MODE=live`; limits verified in a dry run
+- [x] Code path: `MODE=live` uses the same adapter on the real endpoint; `engine_state.entries_enabled` starts **false** in live (dry run: balances, filters, streams, reconciliation, no orders) and is armed with the `entries_on` command (Controls page)
+- [ ] Live keys (no withdrawal, IP-restricted) in `.env`; dry run reviewed; entries enabled with small capital — your call, not automated
 - [ ] Weekly journal review ritual noted in `DECISIONS.md`
 
 ### M8 More strategies · M9 Futures
 
-- [ ] S2, S3, second timeframe instances of S1, optuna walk-forward, would-have-won job, Backtests + Controls pages
+- [x] S2 (`indicator_confluence`), S3 (`range`, 5m/15m/1h), second S1 instance by config (`s1_btc_1h`), optuna walk-forward (`research optimize`), nightly would-have-won job (`research would-have-won`, pm2 cron 00:30 UTC), Backtests page (runs, cumulative R, trades, would-have-won table) + Controls page
 - [ ] Futures adapter, shorts, leverage cap, liquidation check

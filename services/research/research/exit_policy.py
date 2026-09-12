@@ -130,14 +130,16 @@ def step(pos: Position, bar: Bar, params: ExitParams) -> list[dict]:
     if pos.tp1_done or (pos.tp1 is None and pos.state == "breakeven"):
         pos.state = "trailing"
     if pos.state == "trailing":
-        new_sl = pos.highest_high - params.trail_atr_k * bar.atr
-        if new_sl > pos.sl:
-            pos.sl = new_sl
-            emit("sl_moved", price=pos.sl, reason="trailing")
-        new_tp = pos.highest_high + params.tp_ratchet_atr * bar.atr
-        if new_tp > pos.tp:
-            pos.tp = new_tp
-            emit("tp_moved", price=pos.tp, reason="ratchet")
+        if params.trail_atr_k is not None:
+            new_sl = pos.highest_high - params.trail_atr_k * bar.atr
+            if new_sl > pos.sl:
+                pos.sl = new_sl
+                emit("sl_moved", price=pos.sl, reason="trailing")
+        if params.tp_ratchet_atr is not None:
+            new_tp = pos.highest_high + params.tp_ratchet_atr * bar.atr
+            if new_tp > pos.tp:
+                pos.tp = new_tp
+                emit("tp_moved", price=pos.tp, reason="ratchet")
     return events
 
 

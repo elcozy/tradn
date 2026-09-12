@@ -9,8 +9,8 @@ import pandas as pd
 from sqlalchemy import text
 
 from .. import db
-from ..config import TIMEFRAME_MS, AppConfig
-from ..strategies.base import make_strategy
+from ..config import TIMEFRAME_MS, AppConfig, StrategyInstance
+from ..strategies.base import make_strategy, strategy_class
 from . import engine
 from .baselines import buy_and_hold, random_baseline
 from .metrics import compute_metrics
@@ -44,28 +44,42 @@ class BacktestResult:
         return "\n".join(lines)
 
 
+def load_frames(
+    cfg: AppConfig, inst: StrategyInstance, since: datetime | None, until: datetime | None
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame | None]:
+    """Entry, regime and (when the instance has a range_tf) range candles from the database; the slower
+    frames start early enough ahead of `since` for the strategy's warmup."""
+    warm = strategy_class(inst.type).warmup_bars(inst, cfg.regime)
+
+    def ahead(tf: str, bars: int) -> datetime | None:
+        return since - pd.Timedelta(milliseconds=TIMEFRAME_MS[tf] * bars) if since is not None else None
+
+    entry_df = db.load_candles(inst.symbol, inst.entry_tf, since=since, until=until)
+    regime_df = db.load_candles(inst.symbol, inst.regime_tf, since=ahead(inst.regime_tf, warm["regime"]), until=until)
+    range_df = None
+    if inst.range_tf:
+        range_df = db.load_candles(inst.symbol, inst.range_tf, since=ahead(inst.range_tf, warm["range"]), until=until)
+    return entry_df, regime_df, range_df
+
+
 def run_backtest(cfg: AppConfig, strategy_id: str, since: datetime | None, until: datetime | None, save: bool = True) -> BacktestResult:
     inst = next((s for s in cfg.strategies if s.id == strategy_id), None)
     if inst is None:
         raise ValueError(f"unknown strategy id {strategy_id}")
     since = since.replace(tzinfo=since.tzinfo or timezone.utc) if since else None
     until = until.replace(tzinfo=until.tzinfo or timezone.utc) if until else None
-    warm_regime = None
-    if since is not None:
-        warm_regime = since - pd.Timedelta(milliseconds=TIMEFRAME_MS[inst.regime_tf] * (cfg.regime.ema_slow + 50))
-    entry_df = db.load_candles(inst.symbol, inst.entry_tf, since=since, until=until)
-    regime_df = db.load_candles(inst.symbol, inst.regime_tf, since=warm_regime, until=until)
-    if entry_df.empty or regime_df.empty:
+    entry_df, regime_df, range_df = load_frames(cfg, inst, since, until)
+    if entry_df.empty or regime_df.empty or (range_df is not None and range_df.empty):
         raise RuntimeError("no candles loaded; run `research ingest` first")
 
     strat = make_strategy(inst, cfg.regime)
-    out = engine.run(cfg, inst, strat, entry_df, regime_df)
+    out = engine.run(cfg, inst, strat, entry_df, regime_df, range_df=range_df)
     trades = out.frame()
     days = (out.end - out.start).total_seconds() / 86400
     metrics = compute_metrics(trades, out.bars, out.bars_in_position, days)
     baselines = {
         "buy_and_hold": buy_and_hold(entry_df),
-        "random": random_baseline(cfg, inst, entry_df, regime_df, n_trades=max(metrics.get("trades", 0), 20)),
+        "random": random_baseline(cfg, inst, entry_df, regime_df, n_trades=max(metrics.get("trades", 0), 20), range_df=range_df),
     }
     run_id = f"bt_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
     if save:

@@ -7,13 +7,16 @@ RSI is below rsi_max. Stop below the level (with an ATR buffer), target at the n
 
 from __future__ import annotations
 
+from typing import ClassVar
+
 import numpy as np
 import pandas as pd
 
 from .. import indicators as ind
+from ..config import TIMEFRAME_MS
 from ..data import align_regime, minutes_since_daily_open
 from ..regime import regime_features, regime_reason
-from .base import SignalDraft, Strategy
+from .base import SearchSpace, SignalDraft, Strategy
 
 DEFAULTS = {
     "swing_width": 5, "level_tolerance_pct": 0.25, "level_min_touches": 2, "level_lookback_days": 30, "level_break_pct": 0.5,
@@ -26,14 +29,30 @@ DEFAULTS = {
 
 class SrBounce(Strategy):
     type = "sr_bounce"
+    SEARCH_SPACE: ClassVar[SearchSpace] = {
+        "touch_pct": ("float", 0.15, 0.5), "wick_min_pct": ("float", 30, 70), "rsi_max": ("float", 35, 55),
+        "stop_below_level_pct": ("float", 0.1, 1.0), "min_r": ("float", 1.0, 3.0), "max_fee_r": ("float", 0.2, 1.0),
+        "invalidation_pct": ("float", 0.0, 1.0),
+    }
+    EXIT_SEARCH_SPACE: ClassVar[SearchSpace] = {"trail_atr_k": ("float", 1.0, 4.0)}
+    WALK_FORWARD_GRID: ClassVar[dict[str, list]] = {
+        "min_r": [1.5, 2.0], "max_fee_r": [0.4, 1.0], "stop_below_level_pct": [0.25, 0.75], "invalidation_pct": [0.0, 0.5],
+    }
+    WALK_FORWARD_EXIT_GRID: ClassVar[dict[str, list]] = {"trail_atr_k": [2.0, 3.0]}
 
     def __init__(self, instance, regime_cfg):
         super().__init__(instance, regime_cfg)
         self.p = {**DEFAULTS, **self.params}
         self._level_cache: dict[int, tuple[list[tuple[float, int]], list[tuple[float, int]]]] = {}
 
+    @classmethod
+    def warmup_bars(cls, instance, regime_cfg) -> dict[str, int]:
+        days = int(instance.params.get("level_lookback_days", DEFAULTS["level_lookback_days"]))
+        lookback = days * 86_400_000 // TIMEFRAME_MS[instance.regime_tf]
+        return {"entry": 600, "regime": regime_cfg.ema_slow + lookback + 50, "range": 0}
+
     # ---- preparation -------------------------------------------------------------------------
-    def prepare(self, entry_df: pd.DataFrame, regime_df: pd.DataFrame) -> None:
+    def prepare(self, entry_df: pd.DataFrame, regime_df: pd.DataFrame, range_df: pd.DataFrame | None = None) -> None:
         p = self.p
         e = entry_df.copy()
         e["rsi"] = ind.rsi(e["close"], int(p["rsi_len"]))

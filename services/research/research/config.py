@@ -22,8 +22,8 @@ class ExitParams(BaseModel):
     tp1_r: float = 1.0
     tp1_fraction: float = Field(0.5, ge=0, le=1)
     breakeven_r: float = 1.0
-    trail_atr_k: float = 2.0
-    tp_ratchet_atr: float = 1.0
+    trail_atr_k: float | None = 2.0  # None: never trail (mean-reversion strategies)
+    tp_ratchet_atr: float | None = 1.0  # None: target never ratchets
     fee_pct: float = 0.1
     max_bars: int | None = None
 

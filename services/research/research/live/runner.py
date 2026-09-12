@@ -19,12 +19,10 @@ from .. import db
 from ..config import TIMEFRAME_MS, AppConfig, StrategyInstance
 from ..contracts import Signal
 from ..journal import write_signal
-from ..strategies.base import SignalDraft, make_strategy
+from ..strategies.base import SignalDraft, make_strategy, prepare_strategy, strategy_class
 from .publisher import publish_signal
 
 console = Console()
-
-ENTRY_BARS = 600  # enough for RSI/ATR warmup and level touches
 
 
 @dataclass
@@ -62,10 +60,13 @@ def build_signal(inst: StrategyInstance, candle_time: pd.Timestamp, d: SignalDra
     )
 
 
-def evaluate_instance(cfg: AppConfig, inst: StrategyInstance, entry_df: pd.DataFrame, regime_df: pd.DataFrame) -> Evaluation:
+def evaluate_instance(
+    cfg: AppConfig, inst: StrategyInstance, entry_df: pd.DataFrame, regime_df: pd.DataFrame,
+    range_df: pd.DataFrame | None = None,
+) -> Evaluation:
     """Evaluate the LAST bar of entry_df (which must be closed)."""
     strat = make_strategy(inst, cfg.regime)
-    strat.prepare(entry_df, regime_df)
+    prepare_strategy(strat, entry_df, regime_df, range_df)
     i = len(entry_df) - 1
     candle_time = entry_df.index[i]
     draft, reason = strat._evaluate(i) if hasattr(strat, "_evaluate") else (strat.signal(i), "signal")
@@ -73,25 +74,29 @@ def evaluate_instance(cfg: AppConfig, inst: StrategyInstance, entry_df: pd.DataF
     return Evaluation(inst.id, candle_time, sig, reason if sig is None else "signal")
 
 
-def load_for(inst: StrategyInstance, cfg: AppConfig, until: datetime | None = None):
-    regime_bars = cfg.regime.ema_slow + 24 * inst.params.get("level_lookback_days", 30) + 50
-    entry_df = db.load_candles(inst.symbol, inst.entry_tf, until=until, limit=ENTRY_BARS)
-    regime_df = db.load_candles(inst.symbol, inst.regime_tf, until=until, limit=regime_bars)
-    return entry_df, regime_df
+def load_for(
+    inst: StrategyInstance, cfg: AppConfig, until: datetime | None = None
+) -> tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame | None]:
+    """(entry, regime, range) candles for one instance; range is None unless the instance has a range_tf."""
+    warm = strategy_class(inst.type).warmup_bars(inst, cfg.regime)
+    entry_df = db.load_candles(inst.symbol, inst.entry_tf, until=until, limit=warm["entry"])
+    regime_df = db.load_candles(inst.symbol, inst.regime_tf, until=until, limit=warm["regime"])
+    range_df = db.load_candles(inst.symbol, inst.range_tf, until=until, limit=warm["range"]) if inst.range_tf else None
+    return entry_df, regime_df, range_df
 
 
 def run_once(cfg: AppConfig, seen: dict[str, pd.Timestamp], publish=publish_signal, write=write_signal) -> list[Evaluation]:
     """Evaluate every enabled instance whose latest closed candle has not been evaluated yet."""
     out: list[Evaluation] = []
     for inst in cfg.enabled_strategies:
-        entry_df, regime_df = load_for(inst, cfg)
-        if entry_df.empty or regime_df.empty:
+        entry_df, regime_df, range_df = load_for(inst, cfg)
+        if entry_df.empty or regime_df.empty or (range_df is not None and range_df.empty):
             console.log(f"[yellow]{inst.id}: no candles yet[/]")
             continue
         latest = entry_df.index[-1]
         if seen.get(inst.id) == latest:
             continue
-        ev = evaluate_instance(cfg, inst, entry_df, regime_df)
+        ev = evaluate_instance(cfg, inst, entry_df, regime_df, range_df)
         seen[inst.id] = latest
         if ev.signal is not None:
             fresh = write(ev.signal)

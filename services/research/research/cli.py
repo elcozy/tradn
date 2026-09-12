@@ -71,6 +71,27 @@ def backtest(
     console.print(result.summary())
 
 
+def _instance_and_frames(strategy_id: str, since: datetime | None):
+    """Config, instance and (entry, regime, range) candle frames for the walk-forward style commands."""
+    from .backtest.runner import load_frames
+    from .config import load_config
+    from .settings import settings
+
+    cfg = load_config(settings.strategy_config_path)
+    inst = next((s for s in cfg.strategies if s.id == strategy_id), None)
+    if inst is None:
+        raise typer.BadParameter(f"unknown strategy id {strategy_id!r}; known: {[s.id for s in cfg.strategies]}")
+    return cfg, inst, load_frames(cfg, inst, since, None)
+
+
+def _print_windows(res: dict) -> None:
+    for w in res["windows"]:
+        console.print(f"{w['train'][0]}..{w['train'][1]} -> {w['test_end']}  params {w['params']} {w['exit']}  "
+                      f"train {w['train_sum_r']}R  test {w['test'].get('trades', 0)} trades "
+                      f"{w['test'].get('expectancy_r')}R exp, {w['test'].get('sum_r')}R sum")
+    console.print("[bold]out-of-sample total:[/]", res["oos"])
+
+
 @app.command()
 def walkforward(
     strategy_id: str = typer.Argument(...),
@@ -78,27 +99,62 @@ def walkforward(
     train_days: int = typer.Option(180),
     test_days: int = typer.Option(60),
 ) -> None:
-    """Rolling walk-forward over a small parameter grid; prints out-of-sample metrics only."""
-    from . import db
+    """Rolling walk-forward over the strategy's small parameter grid; prints out-of-sample metrics only."""
     from .backtest.walkforward import walk_forward
+    from .strategies.base import strategy_class
+
+    cfg, inst, (entry_df, regime_df, range_df) = _instance_and_frames(strategy_id, since)
+    cls = strategy_class(inst.type)
+    res = walk_forward(cfg, inst, entry_df, regime_df, cls.WALK_FORWARD_GRID, cls.WALK_FORWARD_EXIT_GRID,
+                       train_days=train_days, test_days=test_days, range_df=range_df)
+    _print_windows(res)
+
+
+@app.command()
+def optimize(
+    strategy_id: str = typer.Argument(...),
+    trials: int = typer.Option(30, help="optuna trials per train window"),
+    since: datetime = typer.Option(None),
+    train_days: int = typer.Option(180),
+    test_days: int = typer.Option(60),
+    seed: int = typer.Option(0, help="TPE sampler seed (same seed, same study)"),
+) -> None:
+    """Walk-forward with an optuna TPE study per train window over the strategy's SEARCH_SPACE (needs `uv sync --extra research`)."""
+    from .backtest.optimize import optimize as _optimize
+
+    cfg, inst, (entry_df, regime_df, range_df) = _instance_and_frames(strategy_id, since)
+    res = _optimize(cfg, inst, entry_df, regime_df, range_df, trials=trials, train_days=train_days, test_days=test_days, seed=seed)
+    _print_windows(res)
+
+
+@app.command("would-have-won")
+def would_have_won(
+    since: datetime = typer.Option(None, help="Only signals at/after this time (default: every pending rejected signal)"),
+) -> None:
+    """Nightly job: replay the exit policy for every rejected signal and record how it would have ended."""
+    from .jobs.would_have_won import run
+
+    n = run(since=since)
+    console.print(f"would_have_won: wrote {n} rows")
+
+
+@app.command()
+def compare(
+    mode: str = typer.Option("shadow", help="shadow | paper | testnet | live"),
+    since: datetime = typer.Option(None, help="Only positions opened at/after this time"),
+    until: datetime = typer.Option(None),
+    strategy_id: str = typer.Option(None),
+    r_tol: float = typer.Option(None, help="Max |live R - backtest R| (default 1e-6 for paper, 0.05 otherwise)"),
+) -> None:
+    """Match every closed live position against a backtest of the same window (M3 shadow check, M5 paper check)."""
+    from .compare import compare as _compare
     from .config import load_config
     from .settings import settings
 
     cfg = load_config(settings.strategy_config_path)
-    inst = next(s for s in cfg.strategies if s.id == strategy_id)
-    entry_df = db.load_candles(inst.symbol, inst.entry_tf, since=since)
-    regime_df = db.load_candles(inst.symbol, inst.regime_tf, since=since)
-    grid = {
-        "min_r": [1.5, 2.0], "max_fee_r": [0.4, 1.0], "stop_below_level_pct": [0.25, 0.75],
-        "invalidation_pct": [0.0, 0.5],
-    }
-    exit_grid = {"trail_atr_k": [2.0, 3.0]}
-    res = walk_forward(cfg, inst, entry_df, regime_df, grid, exit_grid, train_days=train_days, test_days=test_days)
-    for w in res["windows"]:
-        console.print(f"{w['train'][0]}..{w['train'][1]} -> {w['test_end']}  params {w['params']} {w['exit']}  "
-                      f"train {w['train_sum_r']}R  test {w['test'].get('trades', 0)} trades "
-                      f"{w['test'].get('expectancy_r')}R exp, {w['test'].get('sum_r')}R sum")
-    console.print("[bold]out-of-sample total:[/]", res["oos"])
+    rep = _compare(cfg, mode, since=since, until=until, strategy_id=strategy_id, r_tol=r_tol)
+    console.print(rep.summary())
+    raise typer.Exit(code=0 if rep.ok else 1)
 
 
 @app.command()

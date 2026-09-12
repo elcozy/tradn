@@ -26,7 +26,7 @@ class RandomEntries(Strategy):
         super().__init__(instance, regime_cfg)
         self.n_trades, self.seed, self.atr_k, self.r_mult = n_trades, seed, atr_k, r_mult
 
-    def prepare(self, entry_df, regime_df):
+    def prepare(self, entry_df, regime_df, range_df=None):
         from .. import indicators as ind
         from ..data import align_regime
 
@@ -50,13 +50,15 @@ class RandomEntries(Strategy):
         return SignalDraft(entry=close, stop=stop, tp=tp, tp1=close + (close - stop), meta={"baseline": "random"})
 
 
-def random_baseline(cfg: AppConfig, instance: StrategyInstance, entry_df, regime_df, n_trades: int, seeds=(0, 1, 2)) -> dict:
+def random_baseline(
+    cfg: AppConfig, instance: StrategyInstance, entry_df, regime_df, n_trades: int, seeds=(0, 1, 2), range_df=None
+) -> dict:
     from .metrics import compute_metrics
 
     exps, sums = [], []
     for s in seeds:
         strat = RandomEntries(instance, cfg.regime, n_trades=max(n_trades, 1), seed=s)
-        out = engine.run(cfg, instance, strat, entry_df, regime_df)
+        out = engine.run(cfg, instance, strat, entry_df, regime_df, range_df=range_df)
         df = out.frame()
         m = compute_metrics(df, out.bars, out.bars_in_position, days=(out.end - out.start).total_seconds() / 86400)
         exps.append(m.get("expectancy_r") or 0.0)
