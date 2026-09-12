@@ -1,0 +1,23 @@
+{
+  "description": "Long 100, SL 96 (R=4), TP 116. TP1 at 104 sells half, breakeven, 2*ATR trail, stopped by the trailing stop.",
+  "params": { "tp1_r": 1.0, "tp1_fraction": 0.5, "breakeven_r": 1.0, "trail_atr_k": 2.0, "tp_ratchet_atr": 1.0, "fee_pct": 0.1, "max_bars": null },
+  "entry": 100, "qty": 2, "sl": 96, "tp": 116,
+  "bars": [
+    { "high": 102, "low": 99, "close": 101, "atr": 1.0 },
+    { "high": 104.5, "low": 100.5, "close": 104.2, "atr": 1.0 },
+    { "high": 108, "low": 103, "close": 107.5, "atr": 1.2 },
+    { "high": 109, "low": 106, "close": 106.2, "atr": 1.2 },
+    { "high": 106.5, "low": 106.5, "close": 106.5, "atr": 1.2 }
+  ],
+  "expected": {
+    "state": "closed", "sl": 106.6, "tp": 116, "remaining_qty": 0, "highest_high": 109, "lowest_low": 99,
+    "events": [
+      { "bar": 2, "type": "tp_partial", "price": 104.0, "qty": 1.0 },
+      { "bar": 2, "type": "sl_moved", "price": 100.2, "reason": "breakeven" },
+      { "bar": 2, "type": "sl_moved", "price": 102.5, "reason": "trailing" },
+      { "bar": 3, "type": "sl_moved", "price": 105.6, "reason": "trailing" },
+      { "bar": 4, "type": "sl_moved", "price": 106.6, "reason": "trailing" },
+      { "bar": 5, "type": "closed", "reason": "stop", "price": 106.6, "qty": 1.0 }
+    ]
+  }
+}

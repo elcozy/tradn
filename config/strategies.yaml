@@ -29,6 +29,8 @@ strategies:
       stop_atr_buffer: 0.1
       max_risk_pct: 1.5 # skip if (entry - stop) / entry exceeds this
       min_r: 1.5 # skip if projected R below this
+      max_fee_r: 0.25 # skip if round-trip fees would eat more than this many R (fee_pct from exit)
+      invalidation_pct: 0.0 # regime close this % below the level closes the trade
     exit:
       tp1_r: 1.0
       tp1_fraction: 0.5

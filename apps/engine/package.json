@@ -7,7 +7,8 @@
     "dev": "tsx watch src/main.ts",
     "start": "tsx src/main.ts",
     "lint": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "candles": "tsx scripts/candles.ts"
   },
   "dependencies": {
     "@trading/contracts": "workspace:*",

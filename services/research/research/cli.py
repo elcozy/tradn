@@ -65,6 +65,46 @@ def backtest(
     console.print(result.summary())
 
 
+@app.command()
+def walkforward(
+    strategy_id: str = typer.Argument(...),
+    since: datetime = typer.Option(None),
+    train_days: int = typer.Option(180),
+    test_days: int = typer.Option(60),
+) -> None:
+    """Rolling walk-forward over a small parameter grid; prints out-of-sample metrics only."""
+    from . import db
+    from .backtest.walkforward import walk_forward
+    from .config import load_config
+    from .settings import settings
+
+    cfg = load_config(settings.strategy_config_path)
+    inst = next(s for s in cfg.strategies if s.id == strategy_id)
+    entry_df = db.load_candles(inst.symbol, inst.entry_tf, since=since)
+    regime_df = db.load_candles(inst.symbol, inst.regime_tf, since=since)
+    grid = {
+        "min_r": [1.5, 2.0], "max_fee_r": [0.4, 1.0], "stop_below_level_pct": [0.25, 0.75],
+        "invalidation_pct": [0.0, 0.5],
+    }
+    exit_grid = {"trail_atr_k": [2.0, 3.0]}
+    res = walk_forward(cfg, inst, entry_df, regime_df, grid, exit_grid, train_days=train_days, test_days=test_days)
+    for w in res["windows"]:
+        console.print(f"{w['train'][0]}..{w['train'][1]} -> {w['test_end']}  params {w['params']} {w['exit']}  "
+                      f"train {w['train_sum_r']}R  test {w['test'].get('trades', 0)} trades "
+                      f"{w['test'].get('expectancy_r')}R exp, {w['test'].get('sum_r')}R sum")
+    console.print("[bold]out-of-sample total:[/]", res["oos"])
+
+
+@app.command()
+def candles(symbol: str = typer.Option("BTCUSDT"), tf: str = typer.Option("15m"), last: int = typer.Option(5)) -> None:
+    """Print the last N closed candles (cross-language check against `pnpm --filter @trading/engine candles`)."""
+    from . import db
+
+    df = db.load_candles(symbol, tf, limit=last)
+    for ts, row in df.iterrows():
+        print(f"{ts.isoformat()} o={row.open:.8g} h={row.high:.8g} l={row.low:.8g} c={row.close:.8g} v={row.volume:.8g}")
+
+
 @app.command("run-live")
 def run_live(
     once: bool = typer.Option(False, help="Evaluate the latest closed candle once and exit"),

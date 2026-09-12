@@ -1,0 +1,14 @@
+{
+  "description": "Nothing happens for max_bars bars: time stop closes at the last close. Breakeven never reached.",
+  "params": { "tp1_r": 1.0, "tp1_fraction": 0.5, "breakeven_r": 1.0, "trail_atr_k": 2.0, "tp_ratchet_atr": 1.0, "fee_pct": 0.1, "max_bars": 3 },
+  "entry": 10, "qty": 100, "sl": 9.5, "tp": 11.5,
+  "bars": [
+    { "high": 10.2, "low": 9.8, "close": 10.1, "atr": 0.1 },
+    { "high": 10.3, "low": 9.9, "close": 10.0, "atr": 0.1 },
+    { "high": 10.25, "low": 9.7, "close": 9.9, "atr": 0.1 }
+  ],
+  "expected": {
+    "state": "closed", "sl": 9.5, "tp": 11.5, "remaining_qty": 0, "highest_high": 10.3, "lowest_low": 9.7,
+    "events": [ { "bar": 3, "type": "closed", "reason": "time", "price": 9.9, "qty": 100.0 } ]
+  }
+}

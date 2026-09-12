@@ -1,0 +1,24 @@
+{
+  "description": "tp1_fraction 0 with tp1 given: partial sells nothing, trailing starts after TP1 touch; TP ratchets above the original target.",
+  "params": { "tp1_r": 1.0, "tp1_fraction": 0.0, "breakeven_r": 1.0, "trail_atr_k": 1.0, "tp_ratchet_atr": 0.5, "fee_pct": 0.0, "max_bars": null },
+  "entry": 100, "qty": 1, "sl": 98, "tp": 104,
+  "bars": [
+    { "high": 102.5, "low": 99.5, "close": 102.2, "atr": 1.0 },
+    { "high": 103.8, "low": 102.0, "close": 103.5, "atr": 1.0 },
+    { "high": 103.9, "low": 103.0, "close": 103.1, "atr": 1.0 },
+    { "high": 103.2, "low": 102.8, "close": 102.9, "atr": 1.0 }
+  ],
+  "expected": {
+    "state": "closed", "sl": 102.9, "tp": 104.4, "remaining_qty": 0, "highest_high": 103.9, "lowest_low": 99.5,
+    "events": [
+      { "bar": 1, "type": "tp_partial", "price": 102.0, "qty": 0.0 },
+      { "bar": 1, "type": "sl_moved", "price": 100.0, "reason": "breakeven" },
+      { "bar": 1, "type": "sl_moved", "price": 101.5, "reason": "trailing" },
+      { "bar": 2, "type": "sl_moved", "price": 102.8, "reason": "trailing" },
+      { "bar": 2, "type": "tp_moved", "price": 104.3, "reason": "ratchet" },
+      { "bar": 3, "type": "sl_moved", "price": 102.9, "reason": "trailing" },
+      { "bar": 3, "type": "tp_moved", "price": 104.4, "reason": "ratchet" },
+      { "bar": 4, "type": "closed", "reason": "stop", "price": 102.9, "qty": 1.0 }
+    ]
+  }
+}

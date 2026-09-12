@@ -1,0 +1,16 @@
+{
+  "description": "TP1 and final TP hit on the same bar; TP ratchet never applies because the position closes.",
+  "params": { "tp1_r": 1.0, "tp1_fraction": 0.5, "breakeven_r": 1.0, "trail_atr_k": 2.0, "tp_ratchet_atr": 1.0, "fee_pct": 0.1, "max_bars": null },
+  "entry": 200, "qty": 4, "sl": 195, "tp": 212,
+  "bars": [
+    { "high": 203, "low": 198, "close": 202, "atr": 2.0 },
+    { "high": 213, "low": 201, "close": 211, "atr": 2.5 }
+  ],
+  "expected": {
+    "state": "closed", "sl": 195, "tp": 212, "remaining_qty": 0, "highest_high": 213, "lowest_low": 198,
+    "events": [
+      { "bar": 2, "type": "tp_partial", "price": 205.0, "qty": 2.0 },
+      { "bar": 2, "type": "closed", "reason": "take_profit", "price": 212, "qty": 2.0 }
+    ]
+  }
+}
