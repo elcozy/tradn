@@ -30,7 +30,8 @@ export interface Config { mode: string; symbols: string[]; timeframes: string[];
 export type WsMessage =
   | { kind: "event"; event: Record<string, unknown> }
   | { kind: "candle"; symbol: string; tf: string; candle: Candle }
-  | { kind: "live"; symbol: string; tf: string; candle: Candle & { closed: boolean } };
+  | { kind: "live"; symbol: string; tf: string; candle: Candle & { closed: boolean } }
+  | { kind: "subscribed"; symbol: string; tf: string; streams: string[] };
 
 /**
  * One shared WebSocket for the whole app (a second connection would just duplicate every message).
@@ -41,6 +42,13 @@ const listeners = new Set<Listener>();
 const statusListeners = new Set<(up: boolean) => void>();
 let socket: WebSocket | null = null;
 let socketUp = false;
+let subscription: { symbol: string; tf: string } | null = null;
+
+/** Tell the server which symbol/timeframe this browser is looking at; re-sent automatically after a reconnect. */
+export function subscribeLive(symbol: string, tf: string) {
+  subscription = { symbol, tf };
+  if (socket && socketUp) socket.send(JSON.stringify({ type: "subscribe", symbol, tf }));
+}
 
 function ensureSocket() {
   if (socket) return;
@@ -49,6 +57,7 @@ function ensureSocket() {
   socket = ws;
   ws.onopen = () => {
     socketUp = true;
+    if (subscription) ws.send(JSON.stringify({ type: "subscribe", ...subscription }));
     statusListeners.forEach((l) => l(true));
   };
   ws.onmessage = (e) => {

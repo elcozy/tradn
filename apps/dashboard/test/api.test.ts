@@ -81,6 +81,22 @@ describe("dashboard api", async () => {
     const bad = await app.inject({ method: "POST", url: "/api/commands", payload: { type: "dance" } });
     expect(bad.statusCode).toBe(500);
   });
+  it("websocket only forwards candles for the subscribed symbol/timeframe", async () => {
+    await app.listen({ port: 0, host: "127.0.0.1" });
+    const port = (app.server.address() as { port: number }).port;
+    const ws = new WebSocket(`ws://127.0.0.1:${port}/ws`);
+    const got: any[] = [];
+    await new Promise<void>((resolve) => {
+      ws.onopen = () => ws.send(JSON.stringify({ type: "subscribe", symbol: "BTCUSDT", tf: "2h" }));
+      ws.onmessage = (e) => {
+        got.push(JSON.parse(String(e.data)));
+        if (got.length >= 2) resolve();
+      };
+    });
+    ws.close();
+    expect(got[0]).toMatchObject({ kind: "subscribed", symbol: "BTCUSDT", tf: "2h", streams: ["15m"] });
+    expect(got[1]).toMatchObject({ kind: "candle", symbol: "BTCUSDT", tf: "15m" }); // base tf of the resampled view
+  });
   it("events come from redis newest first", async () => {
     await redis.xadd("engine.events", "*", "json", JSON.stringify({ v: 1, ts: "x", mode: "shadow", type: "heartbeat" }));
     await redis.xadd("engine.events", "*", "json", JSON.stringify({ v: 1, ts: "y", mode: "shadow", type: "alert" }));

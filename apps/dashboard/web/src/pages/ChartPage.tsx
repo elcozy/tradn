@@ -1,6 +1,6 @@
 import { ColorType, CrosshairMode, LineStyle, createChart, type IChartApi, type IPriceLine, type ISeriesApi, type LogicalRange, type SeriesMarker, type Time, type UTCTimestamp } from "lightweight-charts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fmt, get, useLive, type Candle, type Config, type PositionRow, type SignalRow } from "../api";
+import { fmt, get, subscribeLive, useLive, type Candle, type Config, type PositionRow, type SignalRow } from "../api";
 import { TF_SECONDS, outcomeColor, signalCandleTime, trailPath } from "../lib/trail";
 
 interface Props { config: Config; tick: number; selectedSignal: string | null; onSelectSignal: (id: string | null) => void }
@@ -30,6 +30,8 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
 
   // initial load for symbol / tf; older history streams in on scroll (see loadOlder)
   useEffect(() => {
+    subscribeLive(symbol, tf);
+    setLastLive(null);
     setExhausted(false);
     get<Candle[]>(`/api/candles?symbol=${symbol}&tf=${tf}&limit=${INITIAL}`).then((c) => {
       setCandles(c);

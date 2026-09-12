@@ -166,23 +166,44 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     return { ok: true, id };
   });
 
-  // Forming candles from the engine (Redis pub/sub) fan out to every socket as {kind:"live"}.
-  const sockets = new Set<{ send(data: string): void }>();
+  // Each socket subscribes to one symbol + timeframe ({type:"subscribe", symbol, tf}); candles are forwarded
+  // only for that symbol and the timeframes needed to render it (the tf itself, or its resample base).
+  interface Sub { symbol: string; tfs: Set<string> }
+  const sockets = new Map<{ send(data: string): void }, Sub | null>();
+  const wantedTfs = (tf: string): Set<string> => {
+    if (deps.config.timeframes.includes(tf)) return new Set([tf]);
+    const rs = RESAMPLE[tf];
+    return new Set(rs ? [rs.base] : []);
+  };
   if (deps.subscriber) {
     await deps.subscriber.subscribe(LIVE_CANDLE_CHANNEL);
     deps.subscriber.on("message", (channel, message) => {
       if (channel !== LIVE_CANDLE_CHANNEL) return;
-      const payload = JSON.stringify({ kind: "live", ...JSON.parse(message) });
-      for (const s of sockets) try { s.send(payload); } catch { /* closed */ }
+      const m = JSON.parse(message) as { symbol: string; tf: string };
+      const payload = JSON.stringify({ kind: "live", ...m });
+      for (const [s, sub] of sockets) {
+        if (!sub || sub.symbol !== m.symbol || !sub.tfs.has(m.tf)) continue;
+        try { s.send(payload); } catch { /* closed */ }
+      }
     });
   }
 
   // WebSocket: pushes {kind:"event"} for every engine event and {kind:"candle"} when a newer closed candle appears.
   app.get("/ws", { websocket: true }, (socket) => {
-    sockets.add(socket);
+    sockets.set(socket, null);
     let lastEventId = "$";
     let lastCandle = new Map<string, number>();
     let alive = true;
+    socket.on("message", (raw: Buffer | string) => {
+      try {
+        const m = JSON.parse(raw.toString()) as { type?: string; symbol?: string; tf?: string };
+        if (m.type === "subscribe" && m.symbol && m.tf) {
+          sockets.set(socket, { symbol: m.symbol, tfs: wantedTfs(m.tf) });
+          lastCandle = new Map(); // re-send the latest closed candle for the new subscription
+          socket.send(JSON.stringify({ kind: "subscribed", symbol: m.symbol, tf: m.tf, streams: [...wantedTfs(m.tf)] }));
+        }
+      } catch { /* ignore malformed client messages */ }
+    });
     socket.on("close", () => {
       alive = false;
       sockets.delete(socket);
@@ -205,8 +226,12 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     const poll = async () => {
       while (alive) {
         try {
-          const rows = await sql`SELECT DISTINCT ON (symbol, timeframe) symbol, timeframe, open_time, open, high, low, close, volume
-            FROM candles WHERE closed ORDER BY symbol, timeframe, open_time DESC`;
+          const sub = sockets.get(socket);
+          const rows = sub
+            ? await sql`SELECT DISTINCT ON (symbol, timeframe) symbol, timeframe, open_time, open, high, low, close, volume
+                FROM candles WHERE closed AND symbol = ${sub.symbol} AND timeframe IN ${sql([...sub.tfs])}
+                ORDER BY symbol, timeframe, open_time DESC`
+            : [];
           for (const r of rows) {
             const key = `${r.symbol}:${r.timeframe}`;
             const t = Math.floor(new Date(r.open_time).getTime() / 1000);
