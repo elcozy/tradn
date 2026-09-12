@@ -16,6 +16,9 @@ export enum CommandType {
   MoveSl = "move_sl",
   NewsOn = "news_on",
   NewsOff = "news_off",
+  /** M7 live gate: a live engine boots with entries off and is armed on purpose. */
+  EntriesOn = "entries_on",
+  EntriesOff = "entries_off",
 }
 
 export async function applyCommand(cmd: EngineCommand, state: StateStore, manager: PositionManager, events: EventSink): Promise<void> {
@@ -35,6 +38,14 @@ export async function applyCommand(cmd: EngineCommand, state: StateStore, manage
     case CommandType.NewsOff:
       await state.setNewsBlock(false);
       await events.emit({ type: EngineEventType.Resumed, reason: "news_block off" });
+      break;
+    case CommandType.EntriesOn:
+      await state.setEntriesEnabled(true);
+      await events.emit({ type: EngineEventType.Resumed, reason: `entries enabled (${cmd.source})` });
+      break;
+    case CommandType.EntriesOff:
+      await state.setEntriesEnabled(false);
+      await events.emit({ type: EngineEventType.Paused, reason: `entries disabled (${cmd.source}); open positions keep trailing` });
       break;
     case CommandType.ClosePosition:
       await manager.closeAll(ExitReason.Manual, cmd.position_id);

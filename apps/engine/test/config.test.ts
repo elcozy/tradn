@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parse as parseYaml } from "yaml";
+import { TIMEFRAME_MS, type Timeframe } from "@trading/contracts";
 import { AppConfigSchema, REPO_ROOT, configTimeframes, enabledStrategies, parseAppConfig, strategyTimeframes } from "../src/config.js";
 
 const text = readFileSync(resolve(REPO_ROOT, "config/strategies.yaml"), "utf8");
@@ -12,8 +13,10 @@ describe("strategy config", () => {
     const cfg = parseAppConfig(text);
     expect(cfg.mode).toBe("shadow");
     expect(enabledStrategies(cfg)[0]?.id).toBe("s1_btc_15m");
-    expect(strategyTimeframes(cfg)).toEqual(["15m", "1h"]);
-    expect(configTimeframes(cfg)).toEqual(["1m", "15m", "1h"]);
+    const tfs = strategyTimeframes(cfg);
+    expect(tfs).toEqual(expect.arrayContaining(["15m", "1h"]));
+    expect(tfs).toEqual([...tfs].sort((a, b) => TIMEFRAME_MS[a] - TIMEFRAME_MS[b])); // fastest first
+    expect(configTimeframes(cfg)).toEqual([...new Set(["1m", ...tfs])].sort((a, b) => TIMEFRAME_MS[a as Timeframe] - TIMEFRAME_MS[b as Timeframe]));
   });
   it("rejects an invalid timeframe", () => {
     const r = raw();

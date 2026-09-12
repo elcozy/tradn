@@ -157,15 +157,19 @@ export function step(pos: PositionState, bar: Bar, params: ExitParams): ExitEven
   // 6) Trailing after TP1 (or after breakeven when there is no TP1).
   if (pos.tp1_done || (pos.tp1 === null && pos.state === ExitState.Breakeven)) pos.state = ExitState.Trailing;
   if (pos.state === ExitState.Trailing) {
-    const newSl = pos.highest_high - params.trail_atr_k * bar.atr;
-    if (newSl > pos.sl) {
-      pos.sl = newSl;
-      emit({ type: ExitEventType.SlMoved, price: pos.sl, reason: ExitReason.Trailing });
+    if (params.trail_atr_k !== null) {
+      const newSl = pos.highest_high - params.trail_atr_k * bar.atr;
+      if (newSl > pos.sl) {
+        pos.sl = newSl;
+        emit({ type: ExitEventType.SlMoved, price: pos.sl, reason: ExitReason.Trailing });
+      }
     }
-    const newTp = pos.highest_high + params.tp_ratchet_atr * bar.atr;
-    if (newTp > pos.tp) {
-      pos.tp = newTp;
-      emit({ type: ExitEventType.TpMoved, price: pos.tp, reason: ExitReason.Ratchet });
+    if (params.tp_ratchet_atr !== null) {
+      const newTp = pos.highest_high + params.tp_ratchet_atr * bar.atr;
+      if (newTp > pos.tp) {
+        pos.tp = newTp;
+        emit({ type: ExitEventType.TpMoved, price: pos.tp, reason: ExitReason.Ratchet });
+      }
     }
   }
   return events;

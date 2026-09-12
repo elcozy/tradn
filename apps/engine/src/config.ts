@@ -16,8 +16,12 @@ const EnvSchema = z.object({
   DATABASE_URL: z.string().default("postgres://trading:trading@localhost:5435/trading"),
   REDIS_URL: z.string().default("redis://localhost:6375"),
   STRATEGY_CONFIG: z.string().default("config/strategies.yaml"),
+  /** Overrides `mode:` in strategies.yaml so a second engine (e.g. paper) can run beside the shadow soak. */
+  MODE: z.enum(["shadow", "paper", "testnet", "live"]).optional(),
   BINANCE_API_KEY: z.string().default(""),
   BINANCE_API_SECRET: z.string().default(""),
+  BINANCE_TESTNET_API_KEY: z.string().default(""),
+  BINANCE_TESTNET_API_SECRET: z.string().default(""),
   TELEGRAM_BOT_TOKEN: z.string().default(""),
   TELEGRAM_CHAT_ID: z.string().default(""),
   LOG_LEVEL: z.string().default("info"),
@@ -31,8 +35,8 @@ export const ExitParamsSchema = z
     tp1_r: z.number().default(1),
     tp1_fraction: z.number().min(0).max(1).default(0.5),
     breakeven_r: z.number().default(1),
-    trail_atr_k: z.number().default(2),
-    tp_ratchet_atr: z.number().default(1),
+    trail_atr_k: z.number().nullable().default(2), // null: never trail (mean-reversion strategies)
+    tp_ratchet_atr: z.number().nullable().default(1), // null: target never ratchets
     fee_pct: z.number().default(0.1),
     max_bars: z.number().int().nullable().default(null),
   })
@@ -121,7 +125,8 @@ export function loadEnv(): Env {
 
 export function loadAppConfig(env: Env): AppConfig {
   const p = isAbsolute(env.STRATEGY_CONFIG) ? env.STRATEGY_CONFIG : resolve(REPO_ROOT, env.STRATEGY_CONFIG);
-  return parseAppConfig(readFileSync(p, "utf8"));
+  const cfg = parseAppConfig(readFileSync(p, "utf8"));
+  return env.MODE ? { ...cfg, mode: env.MODE } : cfg;
 }
 
 /** Union of every timeframe any strategy needs, fastest first. */
