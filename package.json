@@ -11,9 +11,17 @@
     "gen": "pnpm --filter @trading/contracts gen && uv run --project services/research python -m research.tools.gen_contracts",
     "engine": "pnpm --filter @trading/engine dev",
     "lint": "pnpm -r lint && uv run --project services/research ruff check services/research",
-    "test": "pnpm -r test && uv run --project services/research pytest -q"
+    "test": "pnpm -r test && uv run --project services/research pytest -q",
+    "dashboard": "pnpm --filter @trading/dashboard build:web && pnpm --filter @trading/dashboard api",
+    "telegram": "pnpm --filter @trading/dashboard telegram",
+    "runner": "uv run --project services/research research run-live",
+    "ps": "pm2 ls",
+    "logs": "pm2 logs --lines 50",
+    "start:all": "pnpm --filter @trading/dashboard build:web && pm2 start ecosystem.config.cjs",
+    "stop:all": "pm2 delete ecosystem.config.cjs"
   },
   "devDependencies": {
-    "typescript": "^5.6.0"
+    "pm2": "^5.4.3",
+    "typescript": "^5.9.3"
   }
 }

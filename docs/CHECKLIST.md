@@ -4,7 +4,7 @@ Tick items as they are done. Every session starts by reading this file. Mileston
 
 ### Every milestone
 
-- [ ] Each new TypeScript file has a `*.test.ts` next to it and `pnpm test` is green before commit; Python files have pytest coverage the same way
+- [x] Each new TypeScript file has a `*.test.ts` next to it and `pnpm test` is green before commit; Python files have pytest coverage the same way
 
 ### M0 Scaffold
 
@@ -43,9 +43,9 @@ Tick items as they are done. Every session starts by reading this file. Mileston
 
 ### M4 Dashboard v1
 
-- [ ] Fastify API over the SQL views + WS push
-- [ ] React pages: Chart (lightweight-charts over our candles, live updates, signal markers, SL/TP lines, trailing path, levels), Overview (signals in flight, today's count), Journal (every signal with reasons and outcome), Scorecard (per strategy instance)
-- [ ] pm2/launchd config so the bot survives reboots
+- [x] Fastify API over the SQL views + WS push
+- [x] React pages: Chart (lightweight-charts over our candles, live updates, signal markers, SL/TP lines, trailing path, levels), Overview (signals in flight, today's count), Journal (every signal with reasons and outcome), Scorecard (per strategy instance)
+- [x] pm2/launchd config so the bot survives reboots
 
 ### M5 Paper wallet
 

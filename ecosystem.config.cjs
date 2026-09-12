@@ -1,14 +1,14 @@
 // pm2 process definitions: `pnpm dlx pm2 start ecosystem.config.cjs` (see README). Logs go to ./logs.
 const path = require("node:path");
-const node = process.execPath;
+// tsx is a devDependency of each app, so its pnpm shell shim lives in that app's node_modules/.bin
+const tsx = (app) => path.join(__dirname, app, "node_modules/.bin/tsx");
 module.exports = {
   apps: [
     {
       name: "engine",
       cwd: path.join(__dirname, "apps/engine"),
-      script: "node_modules/.bin/tsx",
-      args: "src/main.ts",
-      interpreter: node,
+      script: "src/main.ts",
+      interpreter: tsx("apps/engine"),
       autorestart: true,
       max_restarts: 50,
       restart_delay: 5000,
@@ -27,11 +27,20 @@ module.exports = {
       error_file: path.join(__dirname, "logs/runner.err.log"),
     },
     {
+      name: "dashboard",
+      cwd: path.join(__dirname, "apps/dashboard"),
+      script: "src/api/main.ts",
+      interpreter: tsx("apps/dashboard"),
+      autorestart: true,
+      restart_delay: 5000,
+      out_file: path.join(__dirname, "logs/dashboard.out.log"),
+      error_file: path.join(__dirname, "logs/dashboard.err.log"),
+    },
+    {
       name: "telegram",
       cwd: path.join(__dirname, "apps/dashboard"),
-      script: "node_modules/.bin/tsx",
-      args: "src/telegram/main.ts",
-      interpreter: node,
+      script: "src/telegram/main.ts",
+      interpreter: tsx("apps/dashboard"),
       autorestart: true,
       restart_delay: 5000,
       out_file: path.join(__dirname, "logs/telegram.out.log"),
