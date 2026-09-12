@@ -15,3 +15,5 @@ One line per decision, newest last: date, decision, reason.
 - 2026-09-12 — Node: **use Node 22 (or `npm i -g pnpm@9`)** because the corepack pnpm 11 shim crashes on Node 20.
 - 2026-09-12 — Dashboard chart: **TradingView Lightweight Charts over our own candles**, with signals, stops, targets, trailing path and levels drawn on it; a link to TradingView for manual analysis. Binance cannot be iframed (blocks embedding), and the free TradingView widget cannot show our own markers.
 - 2026-09-12 — Testing: **unit tests written with each TypeScript file as it is created** (vitest, fakes for exchange and network), same rule for Python with pytest; a step is not done with missing or red tests. Reason: order and position logic is where bugs cost money, and retrofitting tests never happens.
+- 2026-09-12 — Ports: **Postgres on host 5435, Redis on host 6375** (compose maps to container defaults) because other local projects already use 5432 and 6379.
+- 2026-09-12 — Dropped `pandas-ta` (needs Python 3.12); indicators are implemented in-house in `research/indicators.py`, which also makes the TypeScript port straightforward.

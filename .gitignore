@@ -1,0 +1,29 @@
+# node
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# env
+.env
+.env.*
+!.env.example
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+
+# generated contracts (regenerate with `pnpm gen`)
+packages/contracts/src/gen/
+services/research/research/contracts/gen.py
+
+# data / logs
+data/
+logs/
+*.log
+.DS_Store
+.claude/

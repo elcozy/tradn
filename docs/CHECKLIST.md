@@ -8,14 +8,14 @@ Tick items as they are done. Every session starts by reading this file. Mileston
 
 ### M0 Scaffold
 
-- [ ] `nvm use 22` (or `npm i -g pnpm@9`), confirm `pnpm --version`
-- [ ] `.gitignore`, `.env.example`, `README.md`; docs folder committed
-- [ ] pnpm workspace (`apps/*`, `packages/*`), `tsconfig.base.json`
-- [ ] `services/research/pyproject.toml` (uv), `research` CLI skeleton (`migrate`, `ingest`, `backtest`, `run-live`)
-- [ ] Strategy config file (`config/strategies.yaml`): symbol, `entry_tf`, `regime_tf`, indicator periods, exit-policy params per strategy instance; loaded by both Python and TS
-- [ ] `infra/docker-compose.yml` (TimescaleDB + Redis) and `infra/migrations/001_init.sql` with all tables, `mode` column everywhere the engine writes
-- [ ] `packages/contracts`: 3 JSON schemas, zod codegen, pydantic codegen, fixture tests both sides
-- [ ] root scripts: `infra:up`, `migrate`, `gen`, `test`, `lint`; first commit
+- [x] `nvm use 22` (or `npm i -g pnpm@9`), confirm `pnpm --version`
+- [x] `.gitignore`, `.env.example`, `README.md`; docs folder committed
+- [x] pnpm workspace (`apps/*`, `packages/*`), `tsconfig.base.json`
+- [x] `services/research/pyproject.toml` (uv), `research` CLI skeleton (`migrate`, `ingest`, `backtest`, `run-live`)
+- [x] Strategy config file (`config/strategies.yaml`): symbol, `entry_tf`, `regime_tf`, indicator periods, exit-policy params per strategy instance; loaded by both Python and TS
+- [x] `infra/docker-compose.yml` (TimescaleDB + Redis) and `infra/migrations/001_init.sql` with all tables, `mode` column everywhere the engine writes
+- [x] `packages/contracts`: 3 JSON schemas, zod codegen, pydantic codegen, fixture tests both sides
+- [x] root scripts: `infra:up`, `migrate`, `gen`, `test`, `lint`; first commit
 
 ### M1 Data
 

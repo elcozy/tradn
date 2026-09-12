@@ -1,0 +1,19 @@
+{
+  "name": "trading",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "infra:up": "docker compose -f infra/docker-compose.yml up -d",
+    "infra:down": "docker compose -f infra/docker-compose.yml down",
+    "migrate": "uv run --project services/research research migrate",
+    "gen": "pnpm --filter @trading/contracts gen && uv run --project services/research python -m research.tools.gen_contracts",
+    "engine": "pnpm --filter @trading/engine dev",
+    "lint": "pnpm -r lint && uv run --project services/research ruff check services/research",
+    "test": "pnpm -r test && uv run --project services/research pytest -q"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}
