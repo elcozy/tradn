@@ -32,3 +32,5 @@ button.btn { cursor: pointer; } button.btn.danger { border-color: #7f1d1d; color
 pre { margin: 0; white-space: pre-wrap; word-break: break-all; color: var(--muted); font-size: 11px; }
 .chart { height: 520px; width: 100%; }
 .scroll { max-height: 520px; overflow: auto; }
+
+.seg { display: inline-flex; gap: 2px; } .seg .btn { padding: 4px 7px; } .seg .btn.active { border-color: var(--accent); color: var(--text); }

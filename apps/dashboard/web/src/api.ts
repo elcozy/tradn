@@ -25,9 +25,12 @@ export interface PositionRow {
   sl_initial: number; tp_price: number; tp1_price: number | null; tp1_done: boolean; state: string; bars_held: number; opened_at: string;
   meta: { events?: { bar: number; type: string; price?: number; reason?: string }[] };
 }
-export interface Config { mode: string; symbols: string[]; timeframes: string[]; strategies: { id: string; symbol: string; entry_tf: string; regime_tf: string; enabled: boolean }[] }
+export interface Config { mode: string; symbols: string[]; timeframes: string[]; chart_timeframes?: string[]; strategies: { id: string; symbol: string; entry_tf: string; regime_tf: string; enabled: boolean }[] }
 
-export type WsMessage = { kind: "event"; event: Record<string, unknown> } | { kind: "candle"; symbol: string; tf: string; candle: Candle };
+export type WsMessage =
+  | { kind: "event"; event: Record<string, unknown> }
+  | { kind: "candle"; symbol: string; tf: string; candle: Candle }
+  | { kind: "live"; symbol: string; tf: string; candle: Candle & { closed: boolean } };
 
 /** Live feed: reconnects on close; returns the latest message and a counter that bumps on every event. */
 export function useLive(onMessage: (m: WsMessage) => void) {

@@ -38,6 +38,15 @@ describe("dashboard api", async () => {
     expect(s.today.rejected).toBe(1);
     expect(s.engine.paused).toBe(false);
   });
+  it("config lists resampled chart timeframes", async () => {
+    expect((await app.inject("/api/config")).json().chart_timeframes).toEqual(["15m", "30m", "1h", "2h", "4h", "1d"]);
+  });
+  it("resamples 2h candles from stored 15m rows", async () => {
+    const h = (await app.inject("/api/candles?symbol=BTCUSDT&tf=2h")).json();
+    expect(h).toHaveLength(3); // 20 x 15m = 5 hours -> buckets 00:00, 02:00, 04:00
+    expect(h[0]).toMatchObject({ open: 100, high: 101, low: 99, close: 107, volume: 8 }); // closes 100..107 in the first two hours
+    expect((await app.inject("/api/candles?tf=7m")).json()).toEqual([]);
+  });
   it("candles are ascending unix seconds with numbers", async () => {
     const c = (await app.inject("/api/candles?symbol=BTCUSDT&tf=15m&limit=5")).json();
     expect(c).toHaveLength(5);

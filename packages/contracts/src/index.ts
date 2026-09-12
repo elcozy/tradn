@@ -9,6 +9,9 @@ export const STREAMS = {
 
 export const CONTRACT_VERSION = 1 as const;
 
+/** Redis pub/sub channel carrying forming (not yet closed) candles for live charts. */
+export const LIVE_CANDLE_CHANNEL = "candles.live" as const;
+
 export const TIMEFRAMES = ["1m", "3m", "5m", "15m", "30m", "1h", "2h", "4h", "1d"] as const;
 export type Timeframe = (typeof TIMEFRAMES)[number];
 

@@ -1,27 +1,67 @@
-import { ColorType, CrosshairMode, LineStyle, createChart, type IChartApi, type IPriceLine, type ISeriesApi, type SeriesMarker, type Time, type UTCTimestamp } from "lightweight-charts";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { ColorType, CrosshairMode, LineStyle, createChart, type IChartApi, type IPriceLine, type ISeriesApi, type LogicalRange, type SeriesMarker, type Time, type UTCTimestamp } from "lightweight-charts";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fmt, get, useLive, type Candle, type Config, type PositionRow, type SignalRow } from "../api";
-import { outcomeColor, signalCandleTime, trailPath } from "../lib/trail";
+import { TF_SECONDS, outcomeColor, signalCandleTime, trailPath } from "../lib/trail";
 
 interface Props { config: Config; tick: number; selectedSignal: string | null; onSelectSignal: (id: string | null) => void }
+
+const RANGES: { label: string; seconds: number | null }[] = [
+  { label: "1d", seconds: 86400 }, { label: "3d", seconds: 3 * 86400 }, { label: "1w", seconds: 7 * 86400 }, { label: "1m", seconds: 30 * 86400 },
+  { label: "3m", seconds: 90 * 86400 }, { label: "6m", seconds: 180 * 86400 }, { label: "1y", seconds: 365 * 86400 }, { label: "all", seconds: null },
+];
+const PAGE = 1500;
 
 export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Props) {
   const [symbol, setSymbol] = useState(config.symbols[0] ?? "BTCUSDT");
   const [tf, setTf] = useState(config.timeframes[0] ?? "15m");
+  const [range, setRange] = useState("1w");
   const [candles, setCandles] = useState<Candle[]>([]);
+  const [loadingOlder, setLoadingOlder] = useState(false);
+  const [exhausted, setExhausted] = useState(false);
   const [signals, setSignals] = useState<SignalRow[]>([]);
   const [positions, setPositions] = useState<PositionRow[]>([]);
   const [detail, setDetail] = useState<{ signal: SignalRow; position: PositionRow | null; events: any[] } | null>(null);
+  const [lastLive, setLastLive] = useState<Candle | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const chart = useRef<IChartApi | null>(null);
   const series = useRef<ISeriesApi<"Candlestick"> | null>(null);
   const trail = useRef<ISeriesApi<"Line"> | null>(null);
   const lines = useRef<IPriceLine[]>([]);
+  const candlesRef = useRef<Candle[]>([]);
+  candlesRef.current = candles;
+  const tfs = config.chart_timeframes ?? config.timeframes;
 
-  // data
+  // initial load for symbol / tf / range
   useEffect(() => {
-    get<Candle[]>(`/api/candles?symbol=${symbol}&tf=${tf}&limit=1500`).then(setCandles).catch(console.error);
-  }, [symbol, tf]);
+    const r = RANGES.find((x) => x.label === range)!;
+    const q = new URLSearchParams({ symbol, tf, limit: String(r.seconds === null ? 50000 : Math.min(50000, Math.ceil(r.seconds / (TF_SECONDS[tf] ?? 900)) + 5)) });
+    if (r.seconds !== null) q.set("from", new Date(Date.now() - r.seconds * 1000).toISOString());
+    setExhausted(false);
+    get<Candle[]>(`/api/candles?${q}`).then((c) => {
+      setCandles(c);
+      series.current?.setData(c.map((k) => ({ ...k, time: k.time as UTCTimestamp })));
+      chart.current?.timeScale().fitContent();
+    }).catch(console.error);
+  }, [symbol, tf, range]);
+
+  // lazy-load older candles when scrolled near the left edge
+  const loadOlder = useCallback(async () => {
+    const first = candlesRef.current[0];
+    if (!first || loadingOlder || exhausted) return;
+    setLoadingOlder(true);
+    try {
+      const older = await get<Candle[]>(`/api/candles?symbol=${symbol}&tf=${tf}&limit=${PAGE}&to=${new Date(first.time * 1000).toISOString()}`);
+      if (older.length === 0) setExhausted(true);
+      else {
+        const merged = [...older, ...candlesRef.current];
+        setCandles(merged);
+        series.current?.setData(merged.map((k) => ({ ...k, time: k.time as UTCTimestamp })));
+      }
+    } finally {
+      setLoadingOlder(false);
+    }
+  }, [symbol, tf, loadingOlder, exhausted]);
+
   useEffect(() => {
     get<{ rows: SignalRow[] }>(`/api/signals?symbol=${symbol}&limit=300`).then((r) => setSignals(r.rows.filter((s) => s.timeframe === tf))).catch(console.error);
     get<PositionRow[]>("/api/positions").then((p) => setPositions(p.filter((x) => x.symbol === symbol))).catch(console.error);
@@ -31,11 +71,26 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
     get<{ signal: SignalRow; position: PositionRow | null; events: any[] }>(`/api/signals/${encodeURIComponent(selectedSignal)}`).then(setDetail).catch(console.error);
   }, [selectedSignal, tick]);
 
+  // live: forming candles every tick (base tf, or aggregated into the resampled tf) and closed candles
   useLive((m) => {
-    if (m.kind === "candle" && m.symbol === symbol && m.tf === tf) {
-      series.current?.update({ ...m.candle, time: m.candle.time as UTCTimestamp });
-      setCandles((c) => (c.length && c[c.length - 1]!.time === m.candle.time ? [...c.slice(0, -1), m.candle] : [...c, m.candle]));
-    }
+    if (m.kind !== "candle" && m.kind !== "live") return;
+    if (m.symbol !== symbol) return;
+    const step = TF_SECONDS[tf] ?? 900;
+    let k: Candle;
+    if (m.tf === tf) k = m.candle;
+    else if (m.tf === "15m" && step > 900 && step % 900 === 0) {
+      // aggregate a 15m update into the current bucket of the displayed timeframe
+      const bucket = m.candle.time - (m.candle.time % step);
+      const last = candlesRef.current[candlesRef.current.length - 1];
+      const cur = last && last.time === bucket ? last : null;
+      const prevInBucket = cur && cur.time === bucket && m.candle.time !== bucket ? cur : null;
+      k = prevInBucket
+        ? { time: bucket, open: prevInBucket.open, high: Math.max(prevInBucket.high, m.candle.high), low: Math.min(prevInBucket.low, m.candle.low), close: m.candle.close, volume: prevInBucket.volume + (m.kind === "candle" ? m.candle.volume : 0) }
+        : { ...m.candle, time: bucket };
+    } else return;
+    series.current?.update({ ...k, time: k.time as UTCTimestamp });
+    setLastLive(k);
+    setCandles((c) => (c.length && c[c.length - 1]!.time === k.time ? [...c.slice(0, -1), k] : c.length && c[c.length - 1]!.time > k.time ? c : [...c, k]));
   });
 
   // chart lifecycle
@@ -55,10 +110,15 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
   }, []);
 
   useEffect(() => {
-    series.current?.setData(candles.map((k) => ({ ...k, time: k.time as UTCTimestamp })));
-  }, [candles]);
+    const c = chart.current;
+    if (!c) return;
+    const h = (r: LogicalRange | null) => {
+      if (r && r.from < 50) void loadOlder();
+    };
+    c.timeScale().subscribeVisibleLogicalRangeChange(h);
+    return () => c.timeScale().unsubscribeVisibleLogicalRangeChange(h);
+  }, [loadOlder]);
 
-  // markers: one per signal on its candle
   const markers = useMemo<SeriesMarker<Time>[]>(
     () =>
       signals
@@ -75,9 +135,8 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
   );
   useEffect(() => {
     series.current?.setMarkers(markers);
-  }, [markers]);
+  }, [markers, candles.length]);
 
-  // click on a marker selects the signal
   useEffect(() => {
     const c = chart.current;
     if (!c) return;
@@ -90,7 +149,6 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
     return () => c.unsubscribeClick(h);
   }, [signals, onSelectSignal]);
 
-  // price lines + trailing path for the selected signal (or every open position when nothing is selected)
   useEffect(() => {
     const s = series.current;
     if (!s) return;
@@ -115,7 +173,6 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
         trail.current?.setData(pts.map((x) => ({ time: x.time as UTCTimestamp, value: x.value })));
         if (p.state !== "closed") add(p.sl_price, "current stop", "#f59e0b");
       }
-      chart.current?.timeScale().scrollToPosition(5, false);
     } else {
       for (const p of positions.filter((x) => x.timeframe === tf)) {
         add(p.entry_price, "entry", "#3b82f6");
@@ -129,18 +186,17 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
     <div className="chart-layout">
       <div className="panel">
         <div className="toolbar">
-          <select value={symbol} onChange={(e) => setSymbol(e.target.value)}>
-            {config.symbols.map((s) => <option key={s}>{s}</option>)}
-          </select>
-          <select value={tf} onChange={(e) => setTf(e.target.value)}>
-            {config.timeframes.map((t) => <option key={t}>{t}</option>)}
-          </select>
+          <select value={symbol} onChange={(e) => setSymbol(e.target.value)}>{config.symbols.map((s) => <option key={s}>{s}</option>)}</select>
+          <select value={tf} onChange={(e) => setTf(e.target.value)}>{tfs.map((t) => <option key={t}>{t}</option>)}</select>
+          <span className="seg">{RANGES.map((r) => <button key={r.label} className={`btn ${range === r.label ? "active" : ""}`} onClick={() => setRange(r.label)}>{r.label}</button>)}</span>
           {selectedSignal && <button className="btn" onClick={() => onSelectSignal(null)}>clear selection</button>}
-          <span className="pill">{candles.length} candles · {signals.length} signals</span>
+          <span className="pill">{candles.length} candles · {signals.length} signals{loadingOlder ? " · loading older…" : exhausted ? " · start of data" : ""}</span>
+          {lastLive && <span className="pill on">last {fmt.price(lastLive.close)}</span>}
           <div className="spacer" style={{ flex: 1 }} />
           <a href={`https://www.tradingview.com/chart/?symbol=BINANCE:${symbol}`} target="_blank" rel="noreferrer">open on TradingView ↗</a>
         </div>
         <div ref={box} className="chart" />
+        <div className="flat" style={{ marginTop: 6 }}>scroll left to load older candles · scroll to zoom · click a marker to inspect a signal</div>
       </div>
       <div className="panel scroll">
         <h3>{detail ? "selected signal" : "signals on this chart"}</h3>
@@ -155,6 +211,7 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
                   <td className={s.outcome ?? (s.position_id ? "open" : "")}>{s.outcome ?? (s.position_id ? "open" : "pending")}</td>
                 </tr>
               ))}
+              {signals.length === 0 && <tr><td colSpan={4} className="flat">no signals for {symbol} {tf} yet</td></tr>}
             </tbody>
           </table>
         )}

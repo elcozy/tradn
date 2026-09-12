@@ -5,7 +5,7 @@
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import websocket from "@fastify/websocket";
-import { EngineCommandSchema, STREAMS } from "@trading/contracts";
+import { EngineCommandSchema, LIVE_CANDLE_CHANNEL, STREAMS } from "@trading/contracts";
 import Fastify, { type FastifyInstance } from "fastify";
 import { existsSync } from "node:fs";
 import type postgres from "postgres";
@@ -20,15 +20,34 @@ export interface RedisLike {
   xread(...args: (string | number)[]): Promise<[string, [string, string[]][]][] | null>;
 }
 
+export interface SubscriberLike {
+  subscribe(channel: string): Promise<unknown>;
+  on(event: "message", cb: (channel: string, message: string) => void): unknown;
+}
+
+/** Timeframes the chart can show by resampling the stored base timeframe with time_bucket. */
+export const RESAMPLE: Record<string, { base: string; bucket: string }> = {
+  "30m": { base: "15m", bucket: "30 minutes" },
+  "1h": { base: "15m", bucket: "1 hour" },
+  "2h": { base: "15m", bucket: "2 hours" },
+  "4h": { base: "15m", bucket: "4 hours" },
+  "1d": { base: "15m", bucket: "1 day" },
+};
+
 export interface ServerDeps {
   sql: Sql;
   redis: RedisLike;
+  subscriber?: SubscriberLike;
   mode: string;
   config: { symbols: string[]; timeframes: string[]; strategies: { id: string; type: string; symbol: string; entry_tf: string; regime_tf: string; enabled: boolean }[] };
   staticDir?: string;
   candlePollMs?: number;
 }
 
+const tfSeconds = (tf: string) => {
+  const m = /^(\d+)([mhd])$/.exec(tf);
+  return m ? Number(m[1]) * (m[2] === "m" ? 60 : m[2] === "h" ? 3600 : 86400) : 0;
+};
 const num = (v: unknown) => (v === null || v === undefined ? null : Number(v));
 const fieldJson = (fields: string[]) => {
   const i = fields.indexOf("json");
@@ -43,7 +62,9 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
 
   app.get("/api/health", async () => ({ ok: true }));
 
-  app.get("/api/config", async () => ({ mode, ...deps.config }));
+  const chartTimeframes = [...new Set([...deps.config.timeframes, ...Object.keys(RESAMPLE).filter((tf) => deps.config.timeframes.includes(RESAMPLE[tf]!.base))])]
+    .sort((a, b) => tfSeconds(a) - tfSeconds(b));
+  app.get("/api/config", async () => ({ mode, ...deps.config, chart_timeframes: chartTimeframes }));
 
   app.get("/api/status", async () => {
     const st = (await sql`SELECT paused, news_block, last_candle_at, last_heartbeat, updated_at FROM engine_state WHERE mode = ${mode}`)[0] ?? null;
@@ -59,15 +80,25 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     tf: z.string().default("15m"),
     from: z.coerce.date().optional(),
     to: z.coerce.date().optional(),
-    limit: z.coerce.number().int().min(1).max(5000).default(1000),
+    limit: z.coerce.number().int().min(1).max(50000).default(1500),
   });
   app.get("/api/candles", async (req) => {
     const q = CandlesQ.parse(req.query);
-    const rows = await sql`
-      SELECT open_time, open, high, low, close, volume FROM candles
-      WHERE symbol = ${q.symbol} AND timeframe = ${q.tf} AND closed
-        ${q.from ? sql`AND open_time >= ${q.from}` : sql``} ${q.to ? sql`AND open_time < ${q.to}` : sql``}
-      ORDER BY open_time DESC LIMIT ${q.limit}`;
+    const stored = deps.config.timeframes.includes(q.tf);
+    const rs = RESAMPLE[q.tf];
+    if (!stored && !rs) return [];
+    const rows = stored
+      ? await sql`
+        SELECT open_time, open, high, low, close, volume FROM candles
+        WHERE symbol = ${q.symbol} AND timeframe = ${q.tf} AND closed
+          ${q.from ? sql`AND open_time >= ${q.from}` : sql``} ${q.to ? sql`AND open_time < ${q.to}` : sql``}
+        ORDER BY open_time DESC LIMIT ${q.limit}`
+      : await sql`
+        SELECT time_bucket(${rs!.bucket}::interval, open_time) AS open_time, first(open, open_time) AS open, max(high) AS high,
+               min(low) AS low, last(close, open_time) AS close, sum(volume) AS volume
+        FROM candles WHERE symbol = ${q.symbol} AND timeframe = ${rs!.base} AND closed
+          ${q.from ? sql`AND open_time >= ${q.from}` : sql``} ${q.to ? sql`AND open_time < ${q.to}` : sql``}
+        GROUP BY 1 ORDER BY 1 DESC LIMIT ${q.limit}`;
     return rows.reverse().map((r) => ({ time: Math.floor(new Date(r.open_time).getTime() / 1000), open: num(r.open), high: num(r.high), low: num(r.low), close: num(r.close), volume: num(r.volume) }));
   });
 
@@ -133,12 +164,27 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     return { ok: true, id };
   });
 
+  // Forming candles from the engine (Redis pub/sub) fan out to every socket as {kind:"live"}.
+  const sockets = new Set<{ send(data: string): void }>();
+  if (deps.subscriber) {
+    await deps.subscriber.subscribe(LIVE_CANDLE_CHANNEL);
+    deps.subscriber.on("message", (channel, message) => {
+      if (channel !== LIVE_CANDLE_CHANNEL) return;
+      const payload = JSON.stringify({ kind: "live", ...JSON.parse(message) });
+      for (const s of sockets) try { s.send(payload); } catch { /* closed */ }
+    });
+  }
+
   // WebSocket: pushes {kind:"event"} for every engine event and {kind:"candle"} when a newer closed candle appears.
   app.get("/ws", { websocket: true }, (socket) => {
+    sockets.add(socket);
     let lastEventId = "$";
     let lastCandle = new Map<string, number>();
     let alive = true;
-    socket.on("close", () => (alive = false));
+    socket.on("close", () => {
+      alive = false;
+      sockets.delete(socket);
+    });
     const pump = async () => {
       while (alive) {
         try {

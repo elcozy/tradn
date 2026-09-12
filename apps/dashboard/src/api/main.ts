@@ -16,10 +16,12 @@ const cfg = parseYaml(readFileSync(resolve(REPO_ROOT, process.env.STRATEGY_CONFI
 const timeframes = [...new Set<string>(cfg.strategies.flatMap((s: any) => [s.entry_tf, s.regime_tf, s.range_tf].filter(Boolean)))];
 const sql = postgres(process.env.DATABASE_URL ?? "postgres://trading:trading@localhost:5435/trading", { max: 5, onnotice: () => {} });
 const redis = new Redis(process.env.REDIS_URL ?? "redis://localhost:6375");
+const subscriber = new Redis(process.env.REDIS_URL ?? "redis://localhost:6375");
 
 const app = await buildServer({
   sql,
   redis: redis as unknown as RedisLike,
+  subscriber,
   mode: cfg.mode ?? "shadow",
   config: { symbols: cfg.symbols, timeframes, strategies: cfg.strategies },
   staticDir: resolve(REPO_ROOT, "apps/dashboard/dist"),

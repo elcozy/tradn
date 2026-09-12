@@ -6,7 +6,7 @@
  * - consumes commands (pause / resume / news / close / kill), heartbeats, alerts on silence
  */
 import { Redis } from "ioredis";
-import type { Timeframe } from "@trading/contracts";
+import { LIVE_CANDLE_CHANNEL, type Timeframe } from "@trading/contracts";
 import { applyCommand, CommandConsumer } from "./commands/consumer.js";
 import { configTimeframes, enabledStrategies, loadAppConfig, loadEnv } from "./config.js";
 import { connectDb, upsertCandle, type Sql } from "./db.js";
@@ -73,6 +73,12 @@ export async function main(): Promise<void> {
   stream.on("connected", ({ reconnect }) => {
     log.info({ reconnect }, "kline stream connected, filling gaps");
     filling = fillAllGaps(sql, fetcher, cfg.symbols, timeframes);
+  });
+  stream.on("candle", (c) => {
+    // forming candle for the dashboard's live chart; closed candles are persisted separately below
+    void redis.publish(LIVE_CANDLE_CHANNEL, JSON.stringify({ symbol: c.symbol, tf: c.timeframe, candle: {
+      time: Math.floor(c.openTime.getTime() / 1000), open: c.open, high: c.high, low: c.low, close: c.close, volume: c.volume, closed: c.closed,
+    } })).catch(() => {});
   });
   stream.on("silence", () => void events.emit({ type: EngineEventType.Alert, reason: "no candle for 3 minutes, reconnecting" }));
   stream.on("candleClosed", async (c) => {
