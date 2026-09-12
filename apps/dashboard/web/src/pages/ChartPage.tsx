@@ -5,17 +5,12 @@ import { TF_SECONDS, outcomeColor, signalCandleTime, trailPath } from "../lib/tr
 
 interface Props { config: Config; tick: number; selectedSignal: string | null; onSelectSignal: (id: string | null) => void }
 
-/** Visible history. Upper-case so it cannot be confused with the candle timeframe picker (15m = 15 minutes). */
-const RANGES: { label: string; seconds: number | null }[] = [
-  { label: "1D", seconds: 86400 }, { label: "3D", seconds: 3 * 86400 }, { label: "1W", seconds: 7 * 86400 }, { label: "1MO", seconds: 30 * 86400 },
-  { label: "3MO", seconds: 90 * 86400 }, { label: "6MO", seconds: 180 * 86400 }, { label: "1Y", seconds: 365 * 86400 }, { label: "ALL", seconds: null },
-];
-const PAGE = 1500;
+const PAGE = 1500; // bars per fetch; older pages load automatically when scrolled to the left edge
+const INITIAL = 3000;
 
 export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Props) {
   const [symbol, setSymbol] = useState(config.symbols[0] ?? "BTCUSDT");
   const [tf, setTf] = useState(config.timeframes[0] ?? "15m");
-  const [range, setRange] = useState("1W");
   const [candles, setCandles] = useState<Candle[]>([]);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [exhausted, setExhausted] = useState(false);
@@ -31,19 +26,17 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
   const candlesRef = useRef<Candle[]>([]);
   candlesRef.current = candles;
   const tfs = config.chart_timeframes ?? config.timeframes;
+  const first = candles[0];
 
-  // initial load for symbol / tf / range
+  // initial load for symbol / tf; older history streams in on scroll (see loadOlder)
   useEffect(() => {
-    const r = RANGES.find((x) => x.label === range)!;
-    const q = new URLSearchParams({ symbol, tf, limit: String(r.seconds === null ? 50000 : Math.min(50000, Math.ceil(r.seconds / (TF_SECONDS[tf] ?? 900)) + 5)) });
-    if (r.seconds !== null) q.set("from", new Date(Date.now() - r.seconds * 1000).toISOString());
     setExhausted(false);
-    get<Candle[]>(`/api/candles?${q}`).then((c) => {
+    get<Candle[]>(`/api/candles?symbol=${symbol}&tf=${tf}&limit=${INITIAL}`).then((c) => {
       setCandles(c);
       series.current?.setData(c.map((k) => ({ ...k, time: k.time as UTCTimestamp })));
-      chart.current?.timeScale().fitContent();
+      chart.current?.timeScale().scrollToRealTime();
     }).catch(console.error);
-  }, [symbol, tf, range]);
+  }, [symbol, tf]);
 
   // lazy-load older candles when scrolled near the left edge
   const loadOlder = useCallback(async () => {
@@ -190,10 +183,8 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
           <select value={symbol} onChange={(e) => setSymbol(e.target.value)}>{config.symbols.map((s) => <option key={s}>{s}</option>)}</select>
           <label className="flat">candle</label>
           <select value={tf} onChange={(e) => setTf(e.target.value)}>{tfs.map((t) => <option key={t}>{t}</option>)}</select>
-          <label className="flat">history</label>
-          <span className="seg">{RANGES.map((r) => <button key={r.label} className={`btn ${range === r.label ? "active" : ""}`} onClick={() => setRange(r.label)}>{r.label}</button>)}</span>
           {selectedSignal && <button className="btn" onClick={() => onSelectSignal(null)}>clear selection</button>}
-          <span className="pill">{candles.length} candles · {signals.length} signals{loadingOlder ? " · loading older…" : exhausted ? " · start of data" : ""}</span>
+          <span className="pill">{candles.length} candles{first ? ` since ${new Date(first.time * 1000).toISOString().slice(0, 10)}` : ""} · {signals.length} signals{loadingOlder ? " · loading older…" : exhausted ? " · start of data" : ""}</span>
           {lastLive && <span className="pill on">last {fmt.price(lastLive.close)}</span>}
           <div className="spacer" style={{ flex: 1 }} />
           <a href={`https://www.tradingview.com/chart/?symbol=BINANCE:${symbol}`} target="_blank" rel="noreferrer">open on TradingView ↗</a>
