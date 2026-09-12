@@ -74,6 +74,20 @@ describe("dashboard api", async () => {
     expect(sc[0].expectancy_r).toBe(1.5);
     expect((await app.inject("/api/daily")).json()[0].r).toBe(1.5);
   });
+  it("equity curve, risk events and the daily loss limit in status", async () => {
+    await sql`INSERT INTO equity_snapshots (ts, mode, balance_quote, unrealised, drawdown_pct) VALUES
+      (now() - interval '2 hours', 'shadow', 10000, 0, 0), (now() - interval '1 hour', 'shadow', 10050, 25, 0), (now(), 'shadow', 10020, -10, 0.5)`;
+    await sql`INSERT INTO risk_events (mode, type, detail) VALUES ('shadow', 'daily_loss', '{"daily_r": -3.2}')`;
+    const eq = (await app.inject("/api/equity")).json();
+    expect(eq).toHaveLength(3);
+    expect(eq[0].equity).toBe(10000);
+    expect(eq[2].equity).toBe(10010);
+    expect(new Date(eq[0].ts).getTime()).toBeLessThan(new Date(eq[2].ts).getTime());
+    expect((await app.inject("/api/risk-events")).json()[0].type).toBe("daily_loss");
+    const s = (await app.inject("/api/status")).json();
+    expect(s.limits.daily_loss_r).toBe(-3);
+    expect(s.engine.balance_quote).toBeNull(); // no wallet yet and no paper config passed
+  });
   it("commands are validated and published", async () => {
     const ok = await app.inject({ method: "POST", url: "/api/commands", payload: { type: "pause", reason: "test" } });
     expect(ok.json().ok).toBe(true);

@@ -53,9 +53,10 @@ export function formatEvent(ev: EngineEvent): string | null {
       return `${tag} ⚠️ reconcile mismatch: ${esc(ev.reason)}`;
     case "risk_limit_hit":
       return `${tag} 🚧 risk limit: ${esc(ev.reason)}`;
-    case "heartbeat":
     case "order_rejected":
-      return null; // heartbeat is silent on Telegram; order_rejected arrives with real orders (M6)
+      return `${tag} 🚨 <b>order problem</b> ${sym}: ${esc(ev.reason)}${ev.price ? ` @ ${money(ev.price)}` : ""}`;
+    case "heartbeat":
+      return null; // silent on Telegram
     default:
       return `${tag} ${esc(ev.type)} ${esc(ev.reason ?? "")}`;
   }

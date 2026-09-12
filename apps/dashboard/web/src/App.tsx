@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { get, useLive, type Config } from "./api";
+import { BacktestsPage } from "./pages/BacktestsPage";
 import { ChartPage } from "./pages/ChartPage";
 import { ControlsPage } from "./pages/ControlsPage";
 import { JournalPage } from "./pages/JournalPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { ScorecardPage } from "./pages/ScorecardPage";
 
-const PAGES = ["Chart", "Overview", "Journal", "Scorecard", "Controls"] as const;
+const PAGES = ["Chart", "Overview", "Journal", "Scorecard", "Backtests", "Controls"] as const;
 type Page = (typeof PAGES)[number];
 
 export function App() {
@@ -48,6 +49,7 @@ export function App() {
         {page === "Overview" && <OverviewPage tick={tick} onShowOnChart={showOnChart} />}
         {page === "Journal" && <JournalPage config={config} tick={tick} onShowOnChart={showOnChart} />}
         {page === "Scorecard" && <ScorecardPage tick={tick} />}
+        {page === "Backtests" && <BacktestsPage tick={tick} />}
         {page === "Controls" && <ControlsPage tick={tick} />}
       </main>
     </>

@@ -23,7 +23,7 @@ const app = await buildServer({
   redis: redis as unknown as RedisLike,
   subscriber,
   mode: cfg.mode ?? "shadow",
-  config: { symbols: cfg.symbols, timeframes, strategies: cfg.strategies },
+  config: { symbols: cfg.symbols, timeframes, strategies: cfg.strategies, risk: cfg.risk, paper: cfg.paper },
   staticDir: resolve(REPO_ROOT, "apps/dashboard/dist"),
 });
 const port = Number(process.env.DASHBOARD_PORT ?? 8787);

@@ -24,7 +24,7 @@ export async function testDb() {
     await sql.unsafe(readFileSync(join(dir, f), "utf8"));
     await sql`INSERT INTO schema_migrations (name) VALUES (${f})`;
   }
-  await sql`TRUNCATE candles, signals, positions, orders, fills, equity_snapshots, backtest_runs, backtest_trades, risk_events, engine_state`;
+  await sql`TRUNCATE candles, signals, positions, orders, fills, equity_snapshots, backtest_runs, backtest_trades, risk_events, engine_state, would_have_won`;
   return sql;
 }
 

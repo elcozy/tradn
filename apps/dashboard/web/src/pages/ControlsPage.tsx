@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { get, post, type PositionRow } from "../api";
 
 export function ControlsPage({ tick }: { tick: number }) {
-  const [status, setStatus] = useState<{ engine: { paused: boolean; news_block: boolean } | null } | null>(null);
+  const [status, setStatus] = useState<{ mode: string; engine: { paused: boolean; news_block: boolean; entries_enabled: boolean } | null } | null>(null);
   const [positions, setPositions] = useState<PositionRow[]>([]);
   const [msg, setMsg] = useState("");
   useEffect(() => {
@@ -23,11 +23,12 @@ export function ControlsPage({ tick }: { tick: number }) {
     <div className="grid cols-2">
       <div className="panel grid" style={{ gap: 8 }}>
         <h3>engine</h3>
-        <div>{e?.paused ? "⏸ paused" : "▶ running"} {e?.news_block ? "· 📰 news block on" : ""}</div>
+        <div>{e?.paused ? "⏸ paused" : "▶ running"} {e?.news_block ? "· 📰 news block on" : ""} {e && !e.entries_enabled ? "· 🔒 entries disabled (dry run)" : ""}</div>
         <div className="toolbar">
           <button className="btn" onClick={() => send("pause")}>pause</button>
           <button className="btn" onClick={() => send("resume")}>resume</button>
           <button className="btn" onClick={() => send(e?.news_block ? "news_off" : "news_on")}>news block {e?.news_block ? "off" : "on"}</button>
+          <button className={`btn ${e?.entries_enabled ? "" : "danger"}`} onClick={() => send(e?.entries_enabled ? "entries_off" : "entries_on", {}, e?.entries_enabled ? undefined : `Enable entries in ${status?.mode} mode? Real orders will be placed from now on.`)}>entries {e?.entries_enabled ? "off" : "on"}</button>
           <button className="btn danger" onClick={() => send("close_all", {}, "Close every open position at market?")}>close all</button>
           <button className="btn danger" onClick={() => send("kill", {}, "KILL: close everything and pause the engine?")}>kill</button>
         </div>

@@ -41,7 +41,13 @@ export interface ServerDeps {
   redis: RedisLike;
   subscriber?: SubscriberLike;
   mode: string;
-  config: { symbols: string[]; timeframes: string[]; strategies: { id: string; type: string; symbol: string; entry_tf: string; regime_tf: string; enabled: boolean }[] };
+  config: {
+    symbols: string[];
+    timeframes: string[];
+    strategies: { id: string; type: string; symbol: string; entry_tf: string; regime_tf: string; enabled: boolean }[];
+    risk?: { per_trade_pct: number; daily_loss_pct: number };
+    paper?: { starting_balance: number };
+  };
   staticDir?: string;
   candlePollMs?: number;
 }
@@ -92,12 +98,33 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   app.get("/api/config", async () => ({ mode, ...deps.config, chart_timeframes: chartTimeframes }));
 
   app.get("/api/status", async () => {
-    const st = (await sql`SELECT paused, news_block, last_candle_at, last_heartbeat, updated_at FROM engine_state WHERE mode = ${mode}`)[0] ?? null;
+    const st = (await sql`SELECT paused, news_block, entries_enabled, balance_quote, last_candle_at, last_heartbeat, updated_at FROM engine_state WHERE mode = ${mode}`)[0] ?? null;
     const open = (await sql`SELECT count(*)::int AS n FROM positions WHERE mode = ${mode} AND state <> 'closed'`)[0]!.n;
     const today = (await sql`SELECT count(*)::int AS signals, count(*) FILTER (WHERE outcome = 'rejected')::int AS rejected,
         count(*) FILTER (WHERE closed_at IS NOT NULL)::int AS closed, coalesce(sum(realized_r), 0)::float AS r, coalesce(sum(realized_pnl), 0)::float AS pnl
       FROM signals WHERE mode = ${mode} AND ts >= date_trunc('day', now())`)[0];
-    return { mode, engine: st, open_positions: open, today };
+    const risk = deps.config.risk ?? { per_trade_pct: 1, daily_loss_pct: 3 };
+    const balance = st?.balance_quote == null ? (deps.config.paper?.starting_balance ?? null) : Number(st.balance_quote);
+    return {
+      mode,
+      engine: st ? { ...st, balance_quote: balance } : null,
+      open_positions: open,
+      today,
+      // daily loss limit expressed in R and in quote, so the Overview can draw today's PnL against it
+      limits: { daily_loss_r: -(risk.daily_loss_pct / risk.per_trade_pct), daily_loss_quote: balance == null ? null : -(balance * risk.daily_loss_pct) / 100 },
+    };
+  });
+
+  /** Equity curve (paper and up): one point per hour plus the last snapshot, oldest first. */
+  app.get("/api/equity", async (req) => {
+    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 2000), 20000);
+    const rows = await sql`SELECT ts, balance_quote, unrealised, drawdown_pct FROM v_equity_curve WHERE mode = ${mode} ORDER BY ts DESC LIMIT ${limit}`;
+    return rows.reverse().map((r) => ({ ...numericRow(r), equity: Number(r.balance_quote) + Number(r.unrealised) }));
+  });
+
+  app.get("/api/risk-events", async (req) => {
+    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 50), 500);
+    return sql`SELECT id, ts, type, detail FROM risk_events WHERE mode = ${mode} ORDER BY ts DESC LIMIT ${limit}`;
   });
 
   const CandlesQ = z.object({
@@ -176,6 +203,11 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   app.get("/api/daily", async () => (await sql`SELECT * FROM v_daily_pnl WHERE mode = ${mode} ORDER BY day`).map(numericRow));
 
   app.get("/api/backtests", async () => (await sql`SELECT id, strategy_id, symbol, timeframe, params, from_ts, to_ts, metrics, created_at FROM backtest_runs ORDER BY created_at DESC LIMIT 50`));
+  /** Rejected signals with the nightly would-have-won verdict (M8). */
+  app.get("/api/would-have-won", async (req) => {
+    const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 200), 1000);
+    return (await sql`SELECT * FROM v_rejected_would_have_won WHERE mode = ${mode} OR mode IS NULL ORDER BY ts DESC LIMIT ${limit}`).map(numericRow);
+  });
   app.get<{ Params: { id: string } }>("/api/backtests/:id/trades", async (req) =>
     (await sql`SELECT * FROM backtest_trades WHERE run_id = ${req.params.id} ORDER BY ts`).map(numericRow),
   );
@@ -187,7 +219,7 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
 
   const CommandBody = z.object({
-    type: z.enum(["close_position", "close_all", "pause", "resume", "kill", "news_on", "news_off"]),
+    type: z.enum(["close_position", "close_all", "pause", "resume", "kill", "news_on", "news_off", "entries_on", "entries_off"]),
     position_id: z.string().optional(),
     symbol: z.string().optional(),
     reason: z.string().optional(),
@@ -354,7 +386,7 @@ const NUMERIC = new Set([
   "entry_price", "stop_price", "tp1_price", "tp_price", "projected_r", "actual_entry", "slippage_pct", "exit_price", "realized_r",
   "realized_pnl", "fees", "mfe_r", "mae_r", "qty", "remaining_qty", "sl_price", "sl_initial", "highest_high", "lowest_low", "pnl",
   "r_multiple", "expectancy_r", "win_rate", "profit_factor", "avg_mfe_of_losers", "avg_mae_of_winners", "avg_bars_held", "total_pnl", "r",
-  "trades", "wins", "losses", "balance_quote", "unrealised", "drawdown_pct",
+  "trades", "wins", "losses", "balance_quote", "unrealised", "drawdown_pct", "would_have_r", "would_have_bars",
 ]);
 export function numericRow<T extends Record<string, unknown>>(row: T): T {
   const out: Record<string, unknown> = { ...row };
