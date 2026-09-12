@@ -1,0 +1,47 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "EngineEvent",
+  "description": "Events emitted by the engine (Redis stream: engine.events) for the dashboard and Telegram.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v", "ts", "mode", "type"],
+  "properties": {
+    "v": { "type": "integer", "const": 1 },
+    "ts": { "type": "string", "format": "date-time" },
+    "mode": { "type": "string", "enum": ["shadow", "paper", "testnet", "live"] },
+    "type": {
+      "type": "string",
+      "enum": [
+        "position_opened",
+        "sl_moved",
+        "tp_moved",
+        "tp_partial",
+        "position_closed",
+        "order_rejected",
+        "signal_rejected",
+        "risk_limit_hit",
+        "kill_switch",
+        "paused",
+        "resumed",
+        "reconcile_mismatch",
+        "heartbeat",
+        "alert"
+      ]
+    },
+    "position_id": { "type": "string" },
+    "signal_id": { "type": "string" },
+    "strategy_id": { "type": "string" },
+    "symbol": { "type": "string" },
+    "timeframe": { "type": "string" },
+    "price": { "type": "number" },
+    "entry_price": { "type": "number" },
+    "sl_price": { "type": "number" },
+    "tp_price": { "type": "number" },
+    "tp1_price": { "type": "number" },
+    "qty": { "type": "number" },
+    "pnl": { "type": "number" },
+    "r_multiple": { "type": "number" },
+    "reason": { "type": "string" },
+    "detail": { "type": "object" }
+  }
+}

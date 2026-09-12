@@ -1,0 +1,13 @@
+{
+  "v": 1,
+  "ts": "2026-09-12T14:30:00Z",
+  "mode": "shadow",
+  "type": "sl_moved",
+  "position_id": "pos_01J7",
+  "signal_id": "s1_btc_15m:BTCUSDT:15m:2026-09-12T14:00:00Z",
+  "strategy_id": "s1_btc_15m",
+  "symbol": "BTCUSDT",
+  "timeframe": "15m",
+  "sl_price": 61300.0,
+  "reason": "trailing"
+}

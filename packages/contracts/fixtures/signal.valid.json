@@ -1,0 +1,17 @@
+{
+  "v": 1,
+  "id": "s1_btc_15m:BTCUSDT:15m:2026-09-12T14:00:00Z",
+  "ts": "2026-09-12T14:15:00Z",
+  "strategy_id": "s1_btc_15m",
+  "strategy_type": "sr_bounce",
+  "symbol": "BTCUSDT",
+  "timeframe": "15m",
+  "side": "long",
+  "entry": { "type": "market", "price": 61234.5 },
+  "stop_price": 60698.0,
+  "tp1_price": 61770.5,
+  "tp_price": 62500.0,
+  "confidence": 0.7,
+  "exit": { "tp1_r": 1.0, "tp1_fraction": 0.5, "breakeven_r": 1.0, "trail_atr_k": 2.0, "tp_ratchet_atr": 1.0, "fee_pct": 0.1, "max_bars": null },
+  "meta": { "level": 60850.0, "rsi": 38.0, "atr": 210.3, "wick_pct": 62.0, "next_resistance": 62500.0 }
+}
