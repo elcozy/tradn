@@ -27,7 +27,7 @@ def test_build_signal_validates_against_contract(cfg):
     d = SignalDraft(entry=100.0, stop=99.0, tp=103.0, tp1=101.0, invalidation_level=99.2, confidence=0.7, meta={"level": 99.2})
     sig = runner.build_signal(inst, pd.Timestamp("2026-09-12 14:00", tz="UTC"), d)
     assert isinstance(sig, Signal)
-    assert sig.ts == "2026-09-12T14:15:00Z"  # candle close time
+    assert sig.ts.isoformat() == "2026-09-12T14:15:00+00:00"  # candle close time
     assert sig.exit.trail_atr_k == inst.exit.trail_atr_k
     assert sig.meta["invalidation_level"] == 99.2
     Signal.model_validate_json(sig.model_dump_json(exclude_none=True))

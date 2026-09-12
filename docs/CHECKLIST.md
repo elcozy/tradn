@@ -19,26 +19,26 @@ Tick items as they are done. Every session starts by reading this file. Mileston
 
 ### M1 Data
 
-- [ ] Python `ingest` (resumable, idempotent upsert, skips the still-open candle) for every timeframe in the config
-- [ ] BTCUSDT 15m + 1h since 2023-01-01 ingested; row counts sanity-checked
-- [ ] TS engine: config, logger, DB, kline WS for the configured timeframes with reconnect + watchdog, upsert closed candles
-- [ ] Same-row check across languages
+- [x] Python `ingest` (resumable, idempotent upsert, skips the still-open candle) for every timeframe in the config
+- [x] BTCUSDT 15m + 1h since 2023-01-01 ingested; row counts sanity-checked
+- [x] TS engine: config, logger, DB, kline WS for the configured timeframes with reconnect + watchdog, upsert closed candles
+- [x] Same-row check across languages
 
 ### M2 Backtest
 
-- [ ] Indicators (EMA, RSI, ATR, Bollinger, MACD, ADX, swing points, level clustering), periods from config
-- [ ] Exit policy in Python + fixtures; TS port + shared-fixture test
-- [ ] Strategy interface + regime filter + S1, timeframes from config
-- [ ] Event-driven backtester (fees, slippage, exit policy, time stop, regime exit)
-- [ ] Metrics + baselines + walk-forward split; results into `backtest_runs` / `backtest_trades`
-- [ ] Decision recorded in `DECISIONS.md`: S1 good enough for shadow, or iterate
+- [x] Indicators (EMA, RSI, ATR, Bollinger, MACD, ADX, swing points, level clustering), periods from config
+- [x] Exit policy in Python + fixtures; TS port + shared-fixture test
+- [x] Strategy interface + regime filter + S1, timeframes from config
+- [x] Event-driven backtester (fees, slippage, exit policy, time stop, regime exit)
+- [x] Metrics + baselines + walk-forward split; results into `backtest_runs` / `backtest_trades`
+- [x] Decision recorded in `DECISIONS.md`: S1 good enough for shadow, or iterate
 
 ### M3 Shadow live (no orders)
 
-- [ ] Signal runner: evaluates on closed candles, deterministic ids, writes the signal row (entry, stop, TP1, TP2, projected R, reasons), publishes to Redis
-- [ ] Engine shadow mode: consumes signals, creates a shadow position, follows live candles with the exit policy, records SL/TP moves, MFE/MAE, bars held, and writes the outcome back to the signal row
-- [ ] Telegram: message on signal, TP1, stop, trailing move, close, daily summary; `/status /pause /resume`
-- [ ] Heartbeat and no-candle alerts
+- [x] Signal runner: evaluates on closed candles, deterministic ids, writes the signal row (entry, stop, TP1, TP2, projected R, reasons), publishes to Redis
+- [x] Engine shadow mode: consumes signals, creates a shadow position, follows live candles with the exit policy, records SL/TP moves, MFE/MAE, bars held, and writes the outcome back to the signal row
+- [x] Telegram: message on signal, TP1, stop, trailing move, close, daily summary; `/status /pause /resume`
+- [x] Heartbeat and no-candle alerts
 - [ ] Run 2 weeks; compare shadow outcomes with a backtest over the same window; note in `DECISIONS.md`
 
 ### M4 Dashboard v1
