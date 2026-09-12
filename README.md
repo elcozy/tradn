@@ -40,13 +40,38 @@ Or run them individually in separate terminals: `pnpm engine`, `pnpm runner`, `p
 
 Telegram commands: `/status /pause /resume /news on|off /close SYMBOL|all /kill /help`.
 
+## Run modes (M5–M7)
+
+One engine process per mode; `MODE=` in the environment overrides `mode:` in `strategies.yaml`, and every mode has its own consumer group, positions, equity and `engine_state` row, so modes can run side by side against the same signal runner.
+
+| mode | entry fill | protection | wallet | needs |
+| --- | --- | --- | --- | --- |
+| `shadow` | signal price, immediately | none (exit policy only) | none (sizing against `paper.starting_balance`) | nothing |
+| `paper` | next candle open + `paper.slippage_pct` (like the backtester) | none | simulated, persisted in `engine_state.balance_quote` | nothing |
+| `testnet` | market order on testnet.binance.vision | two OCO sell lists, reconciled every 5 min | exchange balance | `BINANCE_TESTNET_API_KEY/SECRET` |
+| `live` | market order | same | exchange balance | `BINANCE_API_KEY/SECRET`; boots with **entries disabled** |
+
+```bash
+pnpm dlx pm2 start ecosystem.config.cjs --only engine-paper   # paper engine beside the shadow soak (logs/engine-paper.out.log)
+MODE=testnet pnpm engine                                      # testnet: real orders, OCO protection, user data stream
+MODE=live pnpm engine                                         # live dry run: no entries until `entries on` in Controls (or POST /api/commands {type:"entries_on"})
+uv run --project services/research research compare --mode paper   # paper positions vs a backtest of the same window (exit 1 on mismatch)
+```
+
+Testnet kill test (M6 done criterion): open a position on testnet, `pm2 stop engine` (or Ctrl-C), confirm the OCO lists are still open on the exchange, restart, and check the log line `start-up reconciliation` reports nothing re-protected and the position keeps trailing.
+
 ## Commands
 
 ```bash
 uv run --project services/research research ingest            # backfill candles for the configured symbols/timeframes
 uv run --project services/research research backtest s1_btc_15m   # full-history backtest, stored in backtest_runs
-uv run --project services/research research walkforward s1_btc_15m # rolling walk-forward over a small grid
+uv run --project services/research research walkforward s1_btc_15m # rolling walk-forward over the strategy's small grid
+uv run --project services/research research optimize s2_btc_15m --trials 30  # optuna TPE per train window (uv sync --extra research)
+uv run --project services/research research compare --mode shadow  # live positions vs backtest over the same window
+uv run --project services/research research would-have-won         # nightly: replay rejected signals (pm2 cron 00:30 UTC)
 uv run --project services/research research candles --last 5       # cross-language row check (pnpm --filter @trading/engine candles)
 uv run --project services/research research run-live          # signal runner (M3)
-pnpm engine                                                    # TS engine (streams candles; shadow mode in M3)
+pnpm engine                                                    # TS engine in the config's mode (MODE= to override)
 ```
+
+Strategies: S1 `sr_bounce` (support bounce), S2 `indicator_confluence` (RSI/Bollinger/MACD), S3 `range` (5m entries in a 15m range, 1h ADX/BB-width regime). Instances are config only — see the comment blocks in `config/strategies.yaml`.

@@ -36,8 +36,8 @@
         "tp1_r": { "type": "number" },
         "tp1_fraction": { "type": "number" },
         "breakeven_r": { "type": "number" },
-        "trail_atr_k": { "type": "number" },
-        "tp_ratchet_atr": { "type": "number" },
+        "trail_atr_k": { "type": ["number", "null"] },
+        "tp_ratchet_atr": { "type": ["number", "null"] },
         "fee_pct": { "type": "number" },
         "max_bars": { "type": ["integer", "null"] }
       }

@@ -9,7 +9,7 @@
     "v": { "type": "integer", "const": 1 },
     "ts": { "type": "string", "format": "date-time" },
     "source": { "type": "string", "enum": ["dashboard", "telegram", "cli"] },
-    "type": { "type": "string", "enum": ["close_position", "close_all", "pause", "resume", "kill", "move_sl", "news_on", "news_off"] },
+    "type": { "type": "string", "enum": ["close_position", "close_all", "pause", "resume", "kill", "move_sl", "news_on", "news_off", "entries_on", "entries_off"] },
     "position_id": { "type": "string" },
     "symbol": { "type": "string" },
     "price": { "type": "number" },

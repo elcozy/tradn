@@ -16,6 +16,32 @@ module.exports = {
       error_file: path.join(__dirname, "logs/engine.err.log"),
     },
     {
+      // M5: a second engine in paper mode beside the shadow soak (own consumer group, own positions/equity rows).
+      // Start it explicitly: `pnpm dlx pm2 start ecosystem.config.cjs --only engine-paper`
+      name: "engine-paper",
+      cwd: path.join(__dirname, "apps/engine"),
+      script: "src/main.ts",
+      interpreter: tsx("apps/engine"),
+      env: { MODE: "paper" },
+      autorestart: true,
+      max_restarts: 50,
+      restart_delay: 5000,
+      out_file: path.join(__dirname, "logs/engine-paper.out.log"),
+      error_file: path.join(__dirname, "logs/engine-paper.err.log"),
+    },
+    {
+      // M8 nightly job: replay rejected signals and record whether they would have won (00:30 UTC).
+      name: "would-have-won",
+      cwd: path.join(__dirname, "services/research"),
+      script: "uv",
+      args: "run research would-have-won",
+      interpreter: "none",
+      autorestart: false,
+      cron_restart: "30 0 * * *",
+      out_file: path.join(__dirname, "logs/would-have-won.out.log"),
+      error_file: path.join(__dirname, "logs/would-have-won.err.log"),
+    },
+    {
       name: "signal-runner",
       cwd: path.join(__dirname, "services/research"),
       script: "uv",
