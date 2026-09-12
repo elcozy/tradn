@@ -2,7 +2,7 @@ import { ColorType, CrosshairMode, LineStyle, createChart, type IChartApi, type 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fmt, get, subscribeLive, useLive, type Candle, type Config, type PositionRow, type SignalRow } from "../api";
 import { bollinger } from "../lib/indicators";
-import { TF_SECONDS, outcomeColor, signalCandleTime, trailPath } from "../lib/trail";
+import { outcomeColor, signalCandleTime, trailPath } from "../lib/trail";
 
 interface Props { config: Config; tick: number; selectedSignal: string | null; onSelectSignal: (id: string | null) => void }
 
@@ -73,24 +73,11 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
   }, [selectedSignal, tick]);
 
   // live: forming candles every tick (base tf, or aggregated into the resampled tf) and closed candles
+  // The server sends only the subscribed symbol and timeframe, already resampled, so this just applies bars.
   useLive((m) => {
     if (m.kind !== "candle" && m.kind !== "live") return;
-    if (m.symbol !== symbol) return;
-    const step = TF_SECONDS[tf] ?? 900;
-    const stored = config.timeframes;
-    const base = stored.includes(tf) ? tf : stored.filter((b) => step % (TF_SECONDS[b] ?? 1) === 0).sort((a, b) => (TF_SECONDS[b] ?? 0) - (TF_SECONDS[a] ?? 0))[0];
-    let k: Candle;
-    if (m.tf === tf) k = m.candle;
-    else if (base && m.tf === base && step > (TF_SECONDS[base] ?? 0)) {
-      // aggregate a base-timeframe update into the current bucket of the displayed (resampled) timeframe
-      const bucket = m.candle.time - (m.candle.time % step);
-      const last = candlesRef.current[candlesRef.current.length - 1];
-      const cur = last && last.time === bucket ? last : null;
-      const prevInBucket = cur && cur.time === bucket && m.candle.time !== bucket ? cur : null;
-      k = prevInBucket
-        ? { time: bucket, open: prevInBucket.open, high: Math.max(prevInBucket.high, m.candle.high), low: Math.min(prevInBucket.low, m.candle.low), close: m.candle.close, volume: prevInBucket.volume + (m.kind === "candle" ? m.candle.volume : 0) }
-        : { ...m.candle, time: bucket };
-    } else return;
+    if (m.symbol !== symbol || m.tf !== tf) return;
+    const k: Candle = { time: m.candle.time, open: m.candle.open, high: m.candle.high, low: m.candle.low, close: m.candle.close, volume: m.candle.volume };
     series.current?.update({ ...k, time: k.time as UTCTimestamp });
     setLastLive(k);
     setCandles((c) => (c.length && c[c.length - 1]!.time === k.time ? [...c.slice(0, -1), k] : c.length && c[c.length - 1]!.time > k.time ? c : [...c, k]));

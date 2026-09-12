@@ -46,6 +46,29 @@ export interface ServerDeps {
   candlePollMs?: number;
 }
 
+export interface Bar {
+  time: number; // bar open time, unix seconds
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+}
+
+/** Combine consecutive bars into one bar stamped with `time`. Bars must be in ascending time order. */
+export function mergeBars(bars: Bar[], time: number): Bar {
+  const first = bars[0]!;
+  const last = bars[bars.length - 1]!;
+  return {
+    time,
+    open: first.open,
+    high: Math.max(...bars.map((b) => b.high)),
+    low: Math.min(...bars.map((b) => b.low)),
+    close: last.close,
+    volume: bars.reduce((a, b) => a + b.volume, 0),
+  };
+}
+
 const tfSeconds = (tf: string) => {
   const m = /^(\d+)([mhd])$/.exec(tf);
   return m ? Number(m[1]) * (m[2] === "m" ? 60 : m[2] === "h" ? 3600 : 86400) : 0;
@@ -84,24 +107,34 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     to: z.coerce.date().optional(),
     limit: z.coerce.number().int().min(1).max(50000).default(1500),
   });
-  app.get("/api/candles", async (req) => {
-    const q = CandlesQ.parse(req.query);
-    const stored = deps.config.timeframes.includes(q.tf);
-    const rs = RESAMPLE[q.tf];
+
+  /** Closed bars of `tf`, oldest first. Stored timeframes are read directly; others are bucketed from their base. */
+  async function queryCandles(symbol: string, tf: string, opts: { from?: Date; to?: Date; limit?: number }): Promise<Bar[]> {
+    const stored = deps.config.timeframes.includes(tf);
+    const rs = RESAMPLE[tf];
     if (!stored && !rs) return [];
+    const { from, to, limit = 1500 } = opts;
     const rows = stored
       ? await sql`
         SELECT open_time, open, high, low, close, volume FROM candles
-        WHERE symbol = ${q.symbol} AND timeframe = ${q.tf} AND closed
-          ${q.from ? sql`AND open_time >= ${q.from}` : sql``} ${q.to ? sql`AND open_time < ${q.to}` : sql``}
-        ORDER BY open_time DESC LIMIT ${q.limit}`
+        WHERE symbol = ${symbol} AND timeframe = ${tf} AND closed
+          ${from ? sql`AND open_time >= ${from}` : sql``} ${to ? sql`AND open_time < ${to}` : sql``}
+        ORDER BY open_time DESC LIMIT ${limit}`
       : await sql`
         SELECT time_bucket(${rs!.bucket}::interval, open_time) AS open_time, first(open, open_time) AS open, max(high) AS high,
                min(low) AS low, last(close, open_time) AS close, sum(volume) AS volume
-        FROM candles WHERE symbol = ${q.symbol} AND timeframe = ${rs!.base} AND closed
-          ${q.from ? sql`AND open_time >= ${q.from}` : sql``} ${q.to ? sql`AND open_time < ${q.to}` : sql``}
-        GROUP BY 1 ORDER BY 1 DESC LIMIT ${q.limit}`;
-    return rows.reverse().map((r) => ({ time: Math.floor(new Date(r.open_time).getTime() / 1000), open: num(r.open), high: num(r.high), low: num(r.low), close: num(r.close), volume: num(r.volume) }));
+        FROM candles WHERE symbol = ${symbol} AND timeframe = ${rs!.base} AND closed
+          ${from ? sql`AND open_time >= ${from}` : sql``} ${to ? sql`AND open_time < ${to}` : sql``}
+        GROUP BY 1 ORDER BY 1 DESC LIMIT ${limit}`;
+    return rows.reverse().map((r) => ({
+      time: Math.floor(new Date(r.open_time).getTime() / 1000),
+      open: num(r.open)!, high: num(r.high)!, low: num(r.low)!, close: num(r.close)!, volume: num(r.volume)!,
+    }));
+  }
+
+  app.get("/api/candles", async (req) => {
+    const q = CandlesQ.parse(req.query);
+    return queryCandles(q.symbol, q.tf, { from: q.from, to: q.to, limit: q.limit });
   });
 
   const SignalsQ = z.object({
@@ -166,26 +199,73 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     return { ok: true, id };
   });
 
-  // Each socket subscribes to one symbol + timeframe ({type:"subscribe", symbol, tf}); candles are forwarded
-  // only for that symbol and the timeframes needed to render it (the tf itself, or its resample base).
-  interface Sub { symbol: string; tfs: Set<string> }
+  /**
+   * Each socket subscribes to exactly one symbol + timeframe ({type:"subscribe", symbol, tf}) and receives
+   * candles only for that pair. When the timeframe is resampled (e.g. 30m from 15m) the server does the
+   * aggregation, so the browser never sees the base timeframe.
+   */
+  interface Sub {
+    symbol: string;
+    tf: string;
+    base: string; // stored timeframe the live updates arrive on
+    step: number; // seconds per displayed bar
+    bucket: number; // open time of the bucket currently being built
+    formingTime: number; // open time of the base bar currently forming
+    closedPart: Bar | null; // base bars already closed inside `bucket`
+  }
   const sockets = new Map<{ send(data: string): void }, Sub | null>();
-  const wantedTfs = (tf: string): Set<string> => {
-    if (deps.config.timeframes.includes(tf)) return new Set([tf]);
-    const rs = RESAMPLE[tf];
-    return new Set(rs ? [rs.base] : []);
-  };
+
+  const baseOf = (tf: string): string | null =>
+    deps.config.timeframes.includes(tf) ? tf : (RESAMPLE[tf]?.base ?? null);
+
   if (deps.subscriber) {
     await deps.subscriber.subscribe(LIVE_CANDLE_CHANNEL);
     deps.subscriber.on("message", (channel, message) => {
       if (channel !== LIVE_CANDLE_CHANNEL) return;
-      const m = JSON.parse(message) as { symbol: string; tf: string };
-      const payload = JSON.stringify({ kind: "live", ...m });
+      const m = JSON.parse(message) as { symbol: string; tf: string; candle: Bar & { closed: boolean } };
       for (const [s, sub] of sockets) {
-        if (!sub || sub.symbol !== m.symbol || !sub.tfs.has(m.tf)) continue;
-        try { s.send(payload); } catch { /* closed */ }
+        if (!sub || sub.symbol !== m.symbol || sub.base !== m.tf) continue;
+        void sendLive(s, sub, m.candle);
       }
     });
+  }
+
+  /** Forward one base-timeframe update as a bar of the subscribed timeframe. */
+  async function sendLive(s: { send(data: string): void }, sub: Sub, forming: Bar): Promise<void> {
+    let bar = forming;
+    if (sub.tf !== sub.base) {
+      const bucket = forming.time - (forming.time % sub.step);
+      // The closed part of a bucket only changes when the bucket rolls over or a base bar closes,
+      // so it is fetched once per base bar rather than on every tick.
+      if (sub.bucket !== bucket || sub.formingTime !== forming.time) {
+        sub.bucket = bucket;
+        sub.formingTime = forming.time;
+        sub.closedPart = bucket === forming.time ? null : await fetchBaseBars(sub.symbol, sub.base, bucket, forming.time);
+      }
+      bar = mergeBars([...(sub.closedPart ? [sub.closedPart] : []), forming], bucket);
+    }
+    try {
+      s.send(JSON.stringify({ kind: "live", symbol: sub.symbol, tf: sub.tf, candle: bar }));
+    } catch {
+      /* socket closed */
+    }
+  }
+
+  /** Aggregate of the closed base bars in [from, to). */
+  async function fetchBaseBars(symbol: string, base: string, fromSec: number, toSec: number): Promise<Bar | null> {
+    const rows = await sql`
+      SELECT open_time, open, high, low, close, volume FROM candles
+      WHERE symbol = ${symbol} AND timeframe = ${base} AND closed
+        AND open_time >= ${new Date(fromSec * 1000)} AND open_time < ${new Date(toSec * 1000)}
+      ORDER BY open_time`;
+    if (rows.length === 0) return null;
+    return mergeBars(
+      rows.map((r) => ({
+        time: Math.floor(new Date(r.open_time).getTime() / 1000),
+        open: num(r.open)!, high: num(r.high)!, low: num(r.low)!, close: num(r.close)!, volume: num(r.volume)!,
+      })),
+      fromSec,
+    );
   }
 
   // WebSocket: pushes {kind:"event"} for every engine event and {kind:"candle"} when a newer closed candle appears.
@@ -197,11 +277,17 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     socket.on("message", (raw: Buffer | string) => {
       try {
         const m = JSON.parse(raw.toString()) as { type?: string; symbol?: string; tf?: string };
-        if (m.type === "subscribe" && m.symbol && m.tf) {
-          sockets.set(socket, { symbol: m.symbol, tfs: wantedTfs(m.tf) });
-          lastCandle = new Map(); // re-send the latest closed candle for the new subscription
-          socket.send(JSON.stringify({ kind: "subscribed", symbol: m.symbol, tf: m.tf, streams: [...wantedTfs(m.tf)] }));
+        if (m.type !== "subscribe" || !m.symbol || !m.tf) return;
+        const base = baseOf(m.tf);
+        if (!base) {
+          socket.send(JSON.stringify({ kind: "error", reason: `unsupported timeframe ${m.tf}` }));
+          return;
         }
+        sockets.set(socket, {
+          symbol: m.symbol, tf: m.tf, base, step: tfSeconds(m.tf), bucket: -1, formingTime: -1, closedPart: null,
+        });
+        lastCandle = new Map(); // re-send the latest closed candle for the new subscription
+        socket.send(JSON.stringify({ kind: "subscribed", symbol: m.symbol, tf: m.tf, base }));
       } catch { /* ignore malformed client messages */ }
     });
     socket.on("close", () => {
@@ -227,18 +313,13 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
       while (alive) {
         try {
           const sub = sockets.get(socket);
-          const rows = sub
-            ? await sql`SELECT DISTINCT ON (symbol, timeframe) symbol, timeframe, open_time, open, high, low, close, volume
-                FROM candles WHERE closed AND symbol = ${sub.symbol} AND timeframe IN ${sql([...sub.tfs])}
-                ORDER BY symbol, timeframe, open_time DESC`
-            : [];
-          for (const r of rows) {
-            const key = `${r.symbol}:${r.timeframe}`;
-            const t = Math.floor(new Date(r.open_time).getTime() / 1000);
-            if ((lastCandle.get(key) ?? 0) < t) {
-              lastCandle.set(key, t);
-              if (lastCandle.size > 0 && alive)
-                socket.send(JSON.stringify({ kind: "candle", symbol: r.symbol, tf: r.timeframe, candle: { time: t, open: num(r.open), high: num(r.high), low: num(r.low), close: num(r.close), volume: num(r.volume) } }));
+          // Closed bars of the SUBSCRIBED timeframe (resampled here when it is not a stored one).
+          const latest = sub ? (await queryCandles(sub.symbol, sub.tf, { limit: 1 }))[0] : undefined;
+          if (sub && latest) {
+            const key = `${sub.symbol}:${sub.tf}`;
+            if ((lastCandle.get(key) ?? 0) < latest.time) {
+              lastCandle.set(key, latest.time);
+              if (alive) socket.send(JSON.stringify({ kind: "candle", symbol: sub.symbol, tf: sub.tf, candle: latest }));
             }
           }
         } catch {
