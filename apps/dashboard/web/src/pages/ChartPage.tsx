@@ -5,16 +5,17 @@ import { TF_SECONDS, outcomeColor, signalCandleTime, trailPath } from "../lib/tr
 
 interface Props { config: Config; tick: number; selectedSignal: string | null; onSelectSignal: (id: string | null) => void }
 
+/** Visible history. Upper-case so it cannot be confused with the candle timeframe picker (15m = 15 minutes). */
 const RANGES: { label: string; seconds: number | null }[] = [
-  { label: "1d", seconds: 86400 }, { label: "3d", seconds: 3 * 86400 }, { label: "1w", seconds: 7 * 86400 }, { label: "1m", seconds: 30 * 86400 },
-  { label: "3m", seconds: 90 * 86400 }, { label: "6m", seconds: 180 * 86400 }, { label: "1y", seconds: 365 * 86400 }, { label: "all", seconds: null },
+  { label: "1D", seconds: 86400 }, { label: "3D", seconds: 3 * 86400 }, { label: "1W", seconds: 7 * 86400 }, { label: "1MO", seconds: 30 * 86400 },
+  { label: "3MO", seconds: 90 * 86400 }, { label: "6MO", seconds: 180 * 86400 }, { label: "1Y", seconds: 365 * 86400 }, { label: "ALL", seconds: null },
 ];
 const PAGE = 1500;
 
 export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Props) {
   const [symbol, setSymbol] = useState(config.symbols[0] ?? "BTCUSDT");
   const [tf, setTf] = useState(config.timeframes[0] ?? "15m");
-  const [range, setRange] = useState("1w");
+  const [range, setRange] = useState("1W");
   const [candles, setCandles] = useState<Candle[]>([]);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [exhausted, setExhausted] = useState(false);
@@ -187,7 +188,9 @@ export function ChartPage({ config, tick, selectedSignal, onSelectSignal }: Prop
       <div className="panel">
         <div className="toolbar">
           <select value={symbol} onChange={(e) => setSymbol(e.target.value)}>{config.symbols.map((s) => <option key={s}>{s}</option>)}</select>
+          <label className="flat">candle</label>
           <select value={tf} onChange={(e) => setTf(e.target.value)}>{tfs.map((t) => <option key={t}>{t}</option>)}</select>
+          <label className="flat">history</label>
           <span className="seg">{RANGES.map((r) => <button key={r.label} className={`btn ${range === r.label ? "active" : ""}`} onClick={() => setRange(r.label)}>{r.label}</button>)}</span>
           {selectedSignal && <button className="btn" onClick={() => onSelectSignal(null)}>clear selection</button>}
           <span className="pill">{candles.length} candles · {signals.length} signals{loadingOlder ? " · loading older…" : exhausted ? " · start of data" : ""}</span>

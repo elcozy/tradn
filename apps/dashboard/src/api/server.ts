@@ -225,7 +225,14 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
   });
 
   if (deps.staticDir && existsSync(deps.staticDir)) {
-    await app.register(fastifyStatic, { root: deps.staticDir, prefix: "/" });
+    await app.register(fastifyStatic, {
+      root: deps.staticDir,
+      prefix: "/",
+      // hashed assets can be cached; index.html must always be re-fetched so a rebuild shows up on plain reload
+      setHeaders: (res, path) => {
+        if (path.endsWith(".html")) res.setHeader("cache-control", "no-cache, no-store, must-revalidate");
+      },
+    });
     app.setNotFoundHandler((req, reply) => {
       if (req.url.startsWith("/api") || req.url.startsWith("/ws")) return reply.code(404).send({ error: "not found" });
       return reply.sendFile("index.html");
