@@ -15,13 +15,13 @@ from ..data import align_regime, minutes_since_daily_open
 from ..regime import regime_features, regime_reason
 from .base import SignalDraft, Strategy
 
-DEFAULTS = dict(
-    swing_width=5, level_tolerance_pct=0.25, level_min_touches=2, level_lookback_days=30, level_break_pct=0.5,
-    touch_pct=0.3, wick_min_pct=50, rsi_len=14, rsi_max=45, atr_len=14,
-    stop_below_level_pct=0.25, stop_atr_buffer=0.1, max_risk_pct=1.5, min_r=1.5,
-    max_fee_r=0.25,          # skip if round-trip fees would cost more than this many R
-    invalidation_pct=0.0,    # regime close this % below the level closes the trade (0 = at the level)
-)
+DEFAULTS = {
+    "swing_width": 5, "level_tolerance_pct": 0.25, "level_min_touches": 2, "level_lookback_days": 30, "level_break_pct": 0.5,
+    "touch_pct": 0.3, "wick_min_pct": 50, "rsi_len": 14, "rsi_max": 45, "atr_len": 14,
+    "stop_below_level_pct": 0.25, "stop_atr_buffer": 0.1, "max_risk_pct": 1.5, "min_r": 1.5,
+    "max_fee_r": 0.25,          # skip if round-trip fees would cost more than this many R
+    "invalidation_pct": 0.0,    # regime close this % below the level closes the trade (0 = at the level)
+}
 
 
 class SrBounce(Strategy):

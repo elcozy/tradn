@@ -1,11 +1,10 @@
-import numpy as np
 import pandas as pd
 import pytest
 
 from research.backtest import engine
 from research.backtest.baselines import buy_and_hold, random_baseline
 from research.backtest.metrics import compute_metrics
-from research.config import RegimeConfig, load_config
+from research.config import load_config
 from research.data import align_regime
 from research.strategies.base import SignalDraft, Strategy
 from research.strategies.sr_bounce import SrBounce
@@ -73,7 +72,7 @@ def test_engine_one_position_at_a_time(cfg, inst):
     strat = FixedEntries(inst, cfg.regime, bars=[50, 51, 52])  # overlapping picks
     out = engine.run(cfg, inst, strat, e, r)
     assert len(out.trades) <= 3
-    for a, b in zip(out.trades, out.trades[1:]):
+    for a, b in zip(out.trades, out.trades[1:], strict=False):
         assert b.opened_at > a.closed_at
 
 

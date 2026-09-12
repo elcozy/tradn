@@ -9,7 +9,7 @@ import pandas as pd
 from sqlalchemy import text
 
 from .. import db
-from ..config import AppConfig, TIMEFRAME_MS
+from ..config import TIMEFRAME_MS, AppConfig
 from ..strategies.base import make_strategy
 from . import engine
 from .baselines import buy_and_hold, random_baseline

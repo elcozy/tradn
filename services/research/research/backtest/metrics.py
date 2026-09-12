@@ -16,15 +16,14 @@ def compute_metrics(trades: pd.DataFrame, bars: int, bars_in_position: int, days
     dd = cum - peak
     daily = trades.groupby(trades["closed_at"].dt.floor("D"))["realized_r"].sum()
     sharpe = float(daily.mean() / daily.std() * math.sqrt(365)) if len(daily) > 1 and daily.std() > 0 else None
-    tp1_bars = []
-    for evs in trades.get("events", pd.Series([[]] * len(trades))):
+    for _evs in trades.get("events", pd.Series([[]] * len(trades))):
         pass
     losers = trades[trades["outcome"] == "loss"]
     winners = trades[trades["outcome"] == "win"]
     return {
-        "trades": int(len(trades)),
-        "wins": int(len(wins)),
-        "losses": int(len(losses)),
+        "trades": len(trades),
+        "wins": len(wins),
+        "losses": len(losses),
         "win_rate": round(len(wins) / max(1, len(wins) + len(losses)), 4),
         "expectancy_r": round(float(r.mean()), 4),
         "sum_r": round(float(r.sum()), 3),

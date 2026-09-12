@@ -45,7 +45,7 @@ def walk_forward(
     exit_grid = exit_grid or {}
     keys, ekeys = list(grid), list(exit_grid)
     combos = [
-        (dict(zip(keys, v)), dict(zip(ekeys, ev)))
+        (dict(zip(keys, v, strict=False)), dict(zip(ekeys, ev, strict=False)))
         for v in itertools.product(*grid.values())
         for ev in (itertools.product(*exit_grid.values()) if ekeys else [()])
     ]

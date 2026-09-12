@@ -1,11 +1,10 @@
 import json
+from pathlib import Path
 
 import pytest
 
 from research.config import ExitParams
 from research.exit_policy import Bar, close_manual, open_position, realized_r, step
-
-from pathlib import Path
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

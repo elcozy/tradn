@@ -125,11 +125,11 @@ def run(
         if pos is not None:
             bars_in_pos += 1
             # regime invalidation: a new regime bar became usable at the close of bar i-1
-            if i > 0 and regime_idx[i] != regime_idx[i - 1] and regime_idx[i] >= 0:
-                if strategy.invalidated(draft.invalidation_level, float(regime_close[regime_idx[i]])):
-                    close_manual(pos, float(opens[i]), "regime")
-                    finish(i)
-                    continue
+            new_regime_bar = i > 0 and regime_idx[i] != regime_idx[i - 1] and regime_idx[i] >= 0
+            if new_regime_bar and strategy.invalidated(draft.invalidation_level, float(regime_close[regime_idx[i]])):
+                close_manual(pos, float(opens[i]), "regime")
+                finish(i)
+                continue
             step(pos, Bar(high=float(highs[i]), low=float(lows[i]), close=float(closes[i]), atr=float(atrs[i])), instance.exit)
             if pos.state == "closed":
                 finish(i)

@@ -119,7 +119,7 @@ def run_live(cfg: AppConfig, once: bool = False, poll_seconds: float = 10.0) -> 
     while True:
         try:
             run_once(cfg, seen)
-        except Exception as e:  # keep running; the engine's watchdog notices prolonged silence
+        except Exception as e:  # noqa: BLE001 — keep running; the engine's watchdog notices prolonged silence
             console.log(f"[red]runner error: {e!r}[/]")
         if once:
             return
