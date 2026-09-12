@@ -32,28 +32,51 @@ export type WsMessage =
   | { kind: "candle"; symbol: string; tf: string; candle: Candle }
   | { kind: "live"; symbol: string; tf: string; candle: Candle & { closed: boolean } };
 
-/** Live feed: reconnects on close; returns the latest message and a counter that bumps on every event. */
-export function useLive(onMessage: (m: WsMessage) => void) {
-  const [connected, setConnected] = useState(false);
+/**
+ * One shared WebSocket for the whole app (a second connection would just duplicate every message).
+ * Components subscribe with useLive(); the socket opens on first use and reconnects on close.
+ */
+type Listener = (m: WsMessage) => void;
+const listeners = new Set<Listener>();
+const statusListeners = new Set<(up: boolean) => void>();
+let socket: WebSocket | null = null;
+let socketUp = false;
+
+function ensureSocket() {
+  if (socket) return;
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${proto}://${location.host}/ws`);
+  socket = ws;
+  ws.onopen = () => {
+    socketUp = true;
+    statusListeners.forEach((l) => l(true));
+  };
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data) as WsMessage;
+    listeners.forEach((l) => l(m));
+  };
+  ws.onclose = () => {
+    socketUp = false;
+    socket = null;
+    statusListeners.forEach((l) => l(false));
+    setTimeout(ensureSocket, 2000);
+  };
+  ws.onerror = () => ws.close();
+}
+
+export function useLive(onMessage: Listener) {
+  const [connected, setConnected] = useState(socketUp);
   const cb = useRef(onMessage);
   cb.current = onMessage;
   useEffect(() => {
-    let ws: WebSocket | null = null;
-    let stop = false;
-    const connect = () => {
-      const proto = location.protocol === "https:" ? "wss" : "ws";
-      ws = new WebSocket(`${proto}://${location.host}/ws`);
-      ws.onopen = () => setConnected(true);
-      ws.onmessage = (e) => cb.current(JSON.parse(e.data));
-      ws.onclose = () => {
-        setConnected(false);
-        if (!stop) setTimeout(connect, 2000);
-      };
-    };
-    connect();
+    ensureSocket();
+    const l: Listener = (m) => cb.current(m);
+    listeners.add(l);
+    statusListeners.add(setConnected);
+    setConnected(socketUp);
     return () => {
-      stop = true;
-      ws?.close();
+      listeners.delete(l);
+      statusListeners.delete(setConnected);
     };
   }, []);
   return connected;

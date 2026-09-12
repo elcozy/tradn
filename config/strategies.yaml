@@ -2,67 +2,128 @@
 # Read by both Python (services/research) and TypeScript (apps/engine, apps/dashboard).
 # Changing a timeframe or parameter is a config edit + restart, never a code change.
 
-mode: shadow # shadow | paper | testnet | live
-
-symbols:
-  - BTCUSDT
-
-# Extra timeframes streamed and stored only for the dashboard chart (no strategy runs on them).
-# Backfilled for chart_lookback_days on `research ingest`; strategy timeframes are backfilled fully.
+mode: shadow
+symbols: [BTCUSDT, BNBUSDT, SOLUSDT, XRPUSDT, DOGEUSDT, ADAUSDT, TRXUSDT, LINKUSDT, AVAXUSDT, XLMUSDT]
 chart_timeframes: [1m]
 chart_lookback_days: 30
-
+# One S1 (support/resistance bounce) instance per symbol. Params, in order:
+#   swing_width           bars either side for a swing high/low on the regime timeframe
+#   level_tolerance_pct   cluster swings within this % into one level
+#   level_min_touches     keep levels touched at least this many times in level_lookback_days
+#   level_break_pct       regime close this % below a level invalidates it
+#   touch_pct             candle low within this % of a support level
+#   wick_min_pct          lower wick as % of candle range
+#   rsi_len / rsi_max     RSI period and maximum for an entry
+#   atr_len               ATR period (stop buffer, trailing)
+#   stop_below_level_pct  stop this % below the level ...
+#   stop_atr_buffer       ... or this many ATR below the candle low, whichever is lower
+#   max_risk_pct          skip if (entry - stop) / entry exceeds this
+#   min_r                 skip if projected R is below this
+#   max_fee_r             skip if round-trip fees would eat more than this many R
+#   invalidation_pct      regime close this % below the level closes the trade
+# exit: tp1_r (partial target in R), tp1_fraction, breakeven_r, trail_atr_k, tp_ratchet_atr, fee_pct, max_bars
 strategies:
-  - id: s1_btc_15m
-    type: sr_bounce
-    symbol: BTCUSDT
-    entry_tf: 15m
-    regime_tf: 1h
-    enabled: true
-    params:
-      swing_width: 5 # bars either side for a swing high/low on the regime timeframe
-      level_tolerance_pct: 0.25 # cluster swings within this % into one level
-      level_min_touches: 2
-      level_lookback_days: 30
-      level_break_pct: 0.5 # regime close this far below a level invalidates it
-      touch_pct: 0.3 # candle low within this % of a support level
-      wick_min_pct: 50 # lower wick as % of candle range
-      rsi_len: 14
-      rsi_max: 45
-      atr_len: 14
-      stop_below_level_pct: 0.25
-      stop_atr_buffer: 0.1
-      max_risk_pct: 1.5 # skip if (entry - stop) / entry exceeds this
-      min_r: 1.5 # skip if projected R below this
-      max_fee_r: 0.25 # skip if round-trip fees would eat more than this many R (fee_pct from exit)
-      invalidation_pct: 0.0 # regime close this % below the level closes the trade
-    exit:
-      tp1_r: 1.0
-      tp1_fraction: 0.5
-      breakeven_r: 1.0
-      trail_atr_k: 2.0
-      tp_ratchet_atr: 1.0
-      fee_pct: 0.1
-      max_bars: null
-
-regime:
-  ema_fast: 50
-  ema_slow: 200
-  atr_len: 14
-  atr_pct_min: 0.3
-  atr_pct_max: 3.0
-  no_trade_minutes_after_daily_open: 15
-
-risk:
-  per_trade_pct: 1.0
-  daily_loss_pct: 3.0
-  max_open: 3
-  max_per_symbol: 1
-  consecutive_loss_cooldown: 3
-  cooldown_minutes: 120
-  notional_cap_pct: 25.0
-
-paper:
-  starting_balance: 10000
-  slippage_pct: 0.05
-  fee_pct: 0.1
+- id: s1_btc_15m
+  type: sr_bounce
+  symbol: BTCUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5,
+    touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
+    max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+- id: s1_bnb_15m
+  type: sr_bounce
+  symbol: BNBUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5,
+    touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
+    max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+- id: s1_sol_15m
+  type: sr_bounce
+  symbol: SOLUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5,
+    touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
+    max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+- id: s1_xrp_15m
+  type: sr_bounce
+  symbol: XRPUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5,
+    touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
+    max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+- id: s1_doge_15m
+  type: sr_bounce
+  symbol: DOGEUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5,
+    touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
+    max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+- id: s1_ada_15m
+  type: sr_bounce
+  symbol: ADAUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5,
+    touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
+    max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+- id: s1_trx_15m
+  type: sr_bounce
+  symbol: TRXUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5,
+    touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
+    max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+- id: s1_link_15m
+  type: sr_bounce
+  symbol: LINKUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5,
+    touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
+    max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+- id: s1_avax_15m
+  type: sr_bounce
+  symbol: AVAXUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5,
+    touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
+    max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+- id: s1_xlm_15m
+  type: sr_bounce
+  symbol: XLMUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5,
+    touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
+    max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+regime: {ema_fast: 50, ema_slow: 200, atr_len: 14, atr_pct_min: 0.3, atr_pct_max: 3.0, no_trade_minutes_after_daily_open: 15}
+risk: {per_trade_pct: 1.0, daily_loss_pct: 3.0, max_open: 3, max_per_symbol: 1, consecutive_loss_cooldown: 3, cooldown_minutes: 120,
+  notional_cap_pct: 25.0}
+paper: {starting_balance: 10000, slippage_pct: 0.05, fee_pct: 0.1}
