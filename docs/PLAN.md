@@ -29,7 +29,8 @@ Honest framing: no bot is guaranteed profitable. The pipeline (backtest with fee
 ## Documents in the repo
 
 - `docs/PLAN.md` — this document: goals, decisions, strategy rules, phases.
-- `docs/ARCHITECTURE.md` — diagrams, repo tree, message payloads and formulas (all code-like detail lives there).
+- `docs/ARCHITECTURE.md` — diagrams, repo tree, runtime flow, message payloads and formulas (all code-like detail lives there).
+- `docs/PLAN_BUILD.md` — the full flow of work, milestone by milestone, with done criteria and no timelines.
 - `docs/CHECKLIST.md` — the step-by-step checklist, ticked as we go. Every session starts by reading it.
 - `docs/DECISIONS.md` — one line per decision with date and reason (e.g. "2026-09-12 spot first: no liquidation risk while learning the bot").
 

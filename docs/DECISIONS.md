@@ -14,3 +14,4 @@ One line per decision, newest last: date, decision, reason.
 - 2026-09-12 — Migrations: **small runner inside the Python CLI** instead of dbmate; one fewer tool to install.
 - 2026-09-12 — Node: **use Node 22 (or `npm i -g pnpm@9`)** because the corepack pnpm 11 shim crashes on Node 20.
 - 2026-09-12 — Dashboard chart: **TradingView Lightweight Charts over our own candles**, with signals, stops, targets, trailing path and levels drawn on it; a link to TradingView for manual analysis. Binance cannot be iframed (blocks embedding), and the free TradingView widget cannot show our own markers.
+- 2026-09-12 — Testing: **unit tests written with each TypeScript file as it is created** (vitest, fakes for exchange and network), same rule for Python with pytest; a step is not done with missing or red tests. Reason: order and position logic is where bugs cost money, and retrofitting tests never happens.

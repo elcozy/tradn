@@ -2,6 +2,10 @@
 
 Tick items as they are done. Every session starts by reading this file. Milestones are defined in [PLAN.md](PLAN.md).
 
+### Every milestone
+
+- [ ] Each new TypeScript file has a `*.test.ts` next to it and `pnpm test` is green before commit; Python files have pytest coverage the same way
+
 ### M0 Scaffold
 
 - [ ] `nvm use 22` (or `npm i -g pnpm@9`), confirm `pnpm --version`
