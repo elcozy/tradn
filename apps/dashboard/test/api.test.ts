@@ -133,4 +133,11 @@ describe("dashboard api", async () => {
     const ev = (await app.inject("/api/events?limit=10")).json();
     expect(ev[0].type).toBe("alert");
   });
+  it("events pointing at a signal that is not in the journal are hidden", async () => {
+    await redis.xadd("engine.events", "*", "json", JSON.stringify({ v: 1, ts: "z", mode: "shadow", type: "position_opened", signal_id: "s1:a", symbol: "BTCUSDT" }));
+    await redis.xadd("engine.events", "*", "json", JSON.stringify({ v: 1, ts: "z", mode: "shadow", type: "position_opened", signal_id: "e2e_test:gone", symbol: "BTCUSDT" }));
+    const ev = (await app.inject("/api/events?limit=10")).json() as { signal_id?: string }[];
+    expect(ev.some((e) => e.signal_id === "s1:a")).toBe(true);
+    expect(ev.some((e) => e.signal_id === "e2e_test:gone")).toBe(false);
+  });
 });

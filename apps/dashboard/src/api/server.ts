@@ -212,10 +212,15 @@ export async function buildServer(deps: ServerDeps): Promise<FastifyInstance> {
     (await sql`SELECT * FROM backtest_trades WHERE run_id = ${req.params.id} ORDER BY ts`).map(numericRow),
   );
 
+  /** Recent engine events for this mode. Events that reference a signal no longer in the journal (test runs,
+   * deleted rows) are dropped so the panel never shows something that cannot be opened. */
   app.get("/api/events", async (req) => {
     const limit = Math.min(Number((req.query as { limit?: string }).limit ?? 100), 500);
     const entries = await redis.xrevrange(STREAMS.engineEvents, "+", "-", "COUNT", limit);
-    return entries.map(([id, fields]) => ({ id, ...fieldJson(fields) })).filter((e) => !e.mode || e.mode === mode);
+    const events = entries.map(([id, fields]) => ({ id, ...fieldJson(fields) })).filter((e) => !e.mode || e.mode === mode);
+    const ids = [...new Set(events.map((e) => e.signal_id as string | undefined).filter((s): s is string => !!s))];
+    const known = new Set(ids.length ? (await sql<{ id: string }[]>`SELECT id FROM signals WHERE id = ANY(${ids})`).map((r) => r.id) : []);
+    return events.filter((e) => !e.signal_id || known.has(e.signal_id));
   });
 
   const CommandBody = z.object({
