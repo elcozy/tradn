@@ -85,12 +85,12 @@ export function OverviewPage({ tick, onShowOnChart }: { tick: number; onShowOnCh
         <div className="panel">
           <h3>recent events</h3>
           {events.length === 0 ? <div className="flat">none</div> : (
-            <table><tbody>{events.map((ev) => (
+            <div className="table-scroll" style={{ maxHeight: 320 }}><table><tbody>{events.map((ev) => (
               <tr key={ev.id} className={ev.signal_id ? "click" : ""} onClick={() => ev.signal_id && onShowOnChart(ev.signal_id)}>
                 <td>{fmt.time(ev.ts)}</td><td>{ev.type}</td><td>{ev.symbol ?? ""}</td><td>{ev.reason ?? ""}</td>
                 <td>{ev.sl_price ? `sl ${fmt.price(ev.sl_price)}` : ev.r_multiple != null ? fmt.r(ev.r_multiple) : ""}</td>
               </tr>
-            ))}</tbody></table>
+            ))}</tbody></table></div>
           )}
         </div>
       </div>

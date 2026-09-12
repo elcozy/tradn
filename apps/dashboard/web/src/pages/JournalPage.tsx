@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fmt, get, type Config, type SignalRow } from "../api";
+import { KV } from "../components/KV";
 
 export function JournalPage({ config, tick, onShowOnChart }: { config: Config; tick: number; onShowOnChart: (id: string) => void }) {
   const [strategy, setStrategy] = useState("");
@@ -25,6 +26,7 @@ export function JournalPage({ config, tick, onShowOnChart }: { config: Config; t
         <button className="btn" disabled={page === 0} onClick={() => setPage(page - 1)}>‹</button>
         <button className="btn" disabled={(page + 1) * limit >= data.total} onClick={() => setPage(page + 1)}>›</button>
       </div>
+      <div className="table-scroll" style={{ maxHeight: "calc(100vh - 140px)" }}>
       <table>
         <thead><tr><th>time</th><th>strategy</th><th>symbol</th><th>entry</th><th>stop</th><th>tp</th><th>proj R</th><th>outcome</th><th>real R</th><th>reason</th><th>bars</th><th>mfe/mae</th><th></th></tr></thead>
         <tbody>
@@ -39,11 +41,12 @@ export function JournalPage({ config, tick, onShowOnChart }: { config: Config; t
                 <td>{s.mfe_r != null ? `${s.mfe_r.toFixed(2)} / ${s.mae_r?.toFixed(2)}` : ""}</td>
                 <td><button className="btn" onClick={(e) => { e.stopPropagation(); onShowOnChart(s.id); }}>chart</button></td>
               </tr>
-              {openRow === s.id && <tr key={s.id + "x"}><td colSpan={13}><pre>{JSON.stringify(s.meta, null, 1)}</pre></td></tr>}
+              {openRow === s.id && <tr key={s.id + "x"}><td colSpan={13}><KV title="why" data={s.meta} /></td></tr>}
             </>
           ))}
         </tbody>
       </table>
+      </div>
     </div>
   );
 }

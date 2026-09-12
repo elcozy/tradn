@@ -30,11 +30,11 @@ def config() -> None:
 
 @app.command()
 def ingest(
-    symbol: str = typer.Option(None, help="Override: single symbol (default: all from config)"),
+    symbol: str = typer.Option(None, help="Override: comma-separated symbols (default: all from config)"),
     tf: str = typer.Option(None, help="Override: comma-separated timeframes (default: all from config)"),
-    since: datetime = typer.Option(None, help="ISO date to start from on first run"),
+    since: datetime = typer.Option(None, help="ISO date to start from; also backfills before the earliest stored candle"),
 ) -> None:
-    """Fetch historical klines into the candles table (resumes from the last stored candle)."""
+    """Fetch historical klines into the candles table (fills backwards to `since` and forwards to now)."""
     from datetime import timedelta, timezone
 
     from .config import load_config
@@ -42,7 +42,7 @@ def ingest(
     from .settings import settings
 
     cfg = load_config(settings.strategy_config_path)
-    symbols = [symbol] if symbol else cfg.symbols
+    symbols = [s.strip().upper() for s in symbol.split(",")] if symbol else cfg.symbols
     tfs = [t.strip() for t in tf.split(",")] if tf else cfg.timeframes
     chart_only = set(cfg.chart_timeframes) - set(cfg.strategy_timeframes)
     for s in symbols:

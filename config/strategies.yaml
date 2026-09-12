@@ -3,7 +3,7 @@
 # Changing a timeframe or parameter is a config edit + restart, never a code change.
 
 mode: shadow
-symbols: [BTCUSDT, BNBUSDT, SOLUSDT, XRPUSDT, DOGEUSDT, ADAUSDT, TRXUSDT, LINKUSDT, AVAXUSDT, XLMUSDT]
+symbols: [BTCUSDT, BNBUSDT, SOLUSDT, XRPUSDT, DOGEUSDT, ADAUSDT, TRXUSDT, LINKUSDT, AVAXUSDT, XLMUSDT, SHIBUSDT, ENAUSDT, C98USDT, ALICEUSDT]
 chart_timeframes: [1m]
 chart_lookback_days: 30
 # One S1 (support/resistance bounce) instance per symbol. Params, in order:
@@ -116,6 +116,46 @@ strategies:
 - id: s1_xlm_15m
   type: sr_bounce
   symbol: XLMUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5,
+    touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
+    max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+- id: s1_shib_15m
+  type: sr_bounce
+  symbol: SHIBUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5,
+    touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
+    max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+- id: s1_ena_15m
+  type: sr_bounce
+  symbol: ENAUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5,
+    touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
+    max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+- id: s1_c98_15m
+  type: sr_bounce
+  symbol: C98USDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5,
+    touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1,
+    max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
+  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
+- id: s1_alice_15m
+  type: sr_bounce
+  symbol: ALICEUSDT
   entry_tf: 15m
   regime_tf: 1h
   enabled: true

@@ -1,6 +1,7 @@
 import { ColorType, CrosshairMode, LineStyle, createChart, type IChartApi, type IPriceLine, type ISeriesApi, type LogicalRange, type SeriesMarker, type Time, type UTCTimestamp } from "lightweight-charts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fmt, get, subscribeLive, useLive, type Candle, type Config, type PositionRow, type SignalRow } from "../api";
+import { KV } from "../components/KV";
 import { bollinger } from "../lib/indicators";
 import { outcomeColor, signalCandleTime, trailPath } from "../lib/trail";
 
@@ -251,7 +252,7 @@ function SignalDetail({ d }: { d: { signal: SignalRow; position: PositionRow | n
       <div className={s.outcome ?? "open"}>
         {s.outcome === "rejected" ? `rejected: ${s.reject_reason}` : s.outcome ? `${s.outcome} ${fmt.r(s.realized_r)} · ${s.close_reason} · ${s.bars_held} bars · mfe ${fmt.r(s.mfe_r)} mae ${fmt.r(s.mae_r)}` : s.position_id ? `open · ${d.position?.state} · stop now ${fmt.price(d.position?.sl_price)}` : "pending"}
       </div>
-      <div><h3>why</h3><pre>{JSON.stringify(s.meta, null, 1)}</pre></div>
+      <div><h3>why</h3><KV data={s.meta} /></div>
       {d.events.length > 0 && (
         <div><h3>events</h3><table><tbody>{d.events.map((e, i) => <tr key={i}><td>bar {e.bar}</td><td>{e.type}</td><td>{fmt.price(e.price)}</td><td>{e.reason ?? ""}</td></tr>)}</tbody></table></div>
       )}

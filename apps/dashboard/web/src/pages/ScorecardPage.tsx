@@ -24,10 +24,10 @@ export function ScorecardPage({ tick }: { tick: number }) {
       <div className="panel">
         <h3>per strategy instance</h3>
         {rows.length === 0 ? <div className="flat">no closed trades yet</div> : (
-          <table>
+          <div className="table-scroll"><table>
             <thead><tr><th>strategy</th><th>symbol</th><th>trades</th><th>W/L</th><th>win rate</th><th>expectancy</th><th>profit factor</th><th>MFE of losers</th><th>MAE of winners</th><th>avg bars</th><th>pnl</th></tr></thead>
             <tbody>{rows.map((r) => <tr key={r.strategy_id + r.symbol + r.timeframe}><td>{r.strategy_id}</td><td>{r.symbol} {r.timeframe}</td><td>{r.trades}</td><td>{r.wins}/{r.losses}</td><td>{fmt.pct(r.win_rate)}</td><td className={r.expectancy_r > 0 ? "win" : "loss"}>{fmt.r(r.expectancy_r)}</td><td>{r.profit_factor ?? "–"}</td><td>{fmt.r(r.avg_mfe_of_losers)}</td><td>{fmt.r(r.avg_mae_of_winners)}</td><td>{r.avg_bars_held}</td><td>{r.total_pnl?.toFixed(2)}</td></tr>)}</tbody>
-          </table>
+          </table></div>
         )}
       </div>
       <div className="panel">
