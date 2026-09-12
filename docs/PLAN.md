@@ -22,7 +22,7 @@ The engine has one `MODE` setting that gates everything else:
 
 Shadow and paper share the same code path; paper only adds the simulated wallet. Nothing above shadow is built until the shadow journal has been reviewed for at least two weeks.
 
-Honest framing: no bot is guaranteed profitable. The pipeline (backtest with fees → walk-forward → paper → testnet → small live) plus hard risk limits is the real product. Strategies are plugins that must earn their place with data.
+Honest framing: no bot is guaranteed profitable. The pipeline (backtest with fees → walk-forward → shadow → paper → testnet → small live) plus hard risk limits is the real product. Strategies are plugins that must earn their place with data.
 
 ---
 
@@ -40,7 +40,7 @@ Honest framing: no bot is guaranteed profitable. The pipeline (backtest with fee
 Three services and two shared stores. The diagram, repo tree and message shapes are in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 - **Python research service**: ingests Binance klines into Postgres, runs indicators, strategies and backtests, and in live mode evaluates each closed candle and publishes signals to Redis.
-- **TypeScript engine**: streams live candles, consumes signals, applies risk limits, places and trails orders through a paper, testnet or live adapter, and writes positions, orders and outcomes back to Postgres.
+- **TypeScript engine**: streams live candles, consumes signals, applies risk limits, follows each signal with the exit policy and, depending on the run mode, either only records what would have happened (shadow) or places and trails orders through a paper, testnet or live adapter. It writes positions, orders and outcomes back to Postgres.
 - **TypeScript dashboard and Telegram bot**: read-only views over the database plus manual overrides sent to the engine as commands.
 - **Postgres (TimescaleDB)** holds candles, the signal journal, positions, orders, fills, equity and backtest results. **Redis Streams** carry signals, engine events and commands.
 
@@ -56,7 +56,7 @@ A pnpm workspace for the TypeScript apps and a uv project for Python: engine and
 | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Binance access    | `ccxt` in both languages (REST); raw `ws` for kline stream and user data stream                                                                                                                                                                    |
 | Python            | `pandas`, `numpy`, `pydantic`, `sqlalchemy` + `psycopg`, `redis`, `typer`; `vectorbt` for sweeps, own event-driven backtester for the exit policy; `optuna` for walk-forward optimisation; `uv`, `ruff`, `pytest`                                  |
-| TypeScript        | `zod`, `postgres` (porsager) or `drizzle-orm`, `ioredis`, `decimal.js` (never floats for qty/price), `pino`, `grammy` (Telegram), `fastify` + `react` + `vite` + `recharts`; `vitest`, `tsx`, `pnpm`                                               |
+| TypeScript        | `zod`, `postgres` (porsager) or `drizzle-orm`, `ioredis`, `decimal.js` (never floats for qty/price), `pino`, `grammy` (Telegram), `fastify` + `react` + `vite`, `lightweight-charts` (candles + overlays) and `recharts` (equity, histograms); `vitest`, `tsx`, `pnpm`                                               |
 | Infra             | Docker Compose: `timescale/timescaledb`, `redis:7`; SQL migrations run by `research migrate` (small runner, no dbmate)                                                                                                                             |
 | Binance endpoints | klines `GET /api/v3/klines`; kline WS `wss://stream.binance.com:9443/stream`; OCO `POST /api/v3/orderList/oco`; user data stream via listenKey; spot testnet `https://testnet.binance.vision`; futures testnet `https://testnet.binancefuture.com` |
 | Keys              | withdrawals disabled, IP-restricted, separate testnet and live keys, never committed                                                                                                                                                               |
@@ -132,10 +132,11 @@ Reference implementation in Python; identical port in TypeScript; both run the s
 5. **Invariant**: no open position without an exchange-side stop. If OCO placement fails 3 times → market-sell the remainder and alert. Reconciliation on start and every 5 min: `fetchOpenOrders` + `fetchBalance` vs DB; a DB position with no exchange stop is re-protected immediately; unknown open orders raise an alert and pause new entries.
 6. **Precision**: from `exchangeInfo` filters `PRICE_FILTER.tickSize`, `LOT_SIZE.stepSize/minQty`, `NOTIONAL.minNotional`, `PERCENT_PRICE_BY_SIDE`. Prices rounded to tick, quantities rounded down to step, all with `decimal.js`.
 7. **Streams**: kline WS (public), user data stream (listenKey, keep-alive every 30 min, reconnect before the 24h cut). Poll `fetchOrder` every 60s as a fallback for missed fills.
-8. **Rate limits**: 1200 weight/min, 50 orders/10s. Our load is a handful per hour; log the `X-MBX-USED-WEIGHT` header anyway.
-9. **Paper adapter**: fills a market order at the next candle open + 0.05% slippage, fee 0.1%; simulates OCOs against candle high/low with the same worst-case ordering as the backtester. Paper and backtest must agree on the same candles.
-10. **Testnet** (`testnet.binance.vision`): supports OCO and user data stream; liquidity is thin so expect odd fills. Used to validate the mechanics, not the strategy.
-11. **Futures later**: same adapter interface; `STOP_MARKET` + `TAKE_PROFIT_MARKET` with `reduceOnly`, optional exchange-native `TRAILING_STOP_MARKET`, leverage cap, liquidation-distance check.
+8. **Rate limits**: 6000 request weight per minute per IP (klines cost 2, most order calls 1), 50 orders per 10 seconds, 160k orders per day. WebSocket: 1024 streams per connection, 300 connections per 5 minutes, forced disconnect every 24h with a ping every 20s. Our load is a handful of calls per hour; log the `X-MBX-USED-WEIGHT` header anyway, back off on HTTP 429, and treat 418 as a ban.
+9. **Reconnect gap fill**: after every WebSocket reconnect, fetch the missed candles over REST before evaluating strategies, so a dropped connection never produces a missing or partial candle in the journal.
+10. **Paper adapter**: fills a market order at the next candle open + 0.05% slippage, fee 0.1%; simulates OCOs against candle high/low with the same worst-case ordering as the backtester. Paper and backtest must agree on the same candles.
+11. **Testnet** (`testnet.binance.vision`): supports OCO and user data stream; liquidity is thin so expect odd fills. Used to validate the mechanics, not the strategy.
+12. **Futures later**: same adapter interface; `STOP_MARKET` + `TAKE_PROFIT_MARKET` with `reduceOnly`, optional exchange-native `TRAILING_STOP_MARKET`, leverage cap, liquidation-distance check.
 
 ---
 
@@ -147,28 +148,29 @@ Reference implementation in Python; identical port in TypeScript; both run the s
 - `signals` — **the journal**, one row per strategy decision:
     - projection (Python): `id` (deterministic: strategy:symbol:tf:candle_time), `ts, strategy, symbol, timeframe, side, entry_type, entry_price, stop_price, tp_price, tp1_price, projected_r, confidence, meta` (indicator snapshot / level / reasons)
     - outcome (TS, written on reject or close): `outcome` (win | loss | breakeven | rejected | expired), `reject_reason, position_id, actual_entry, slippage_pct, exit_price, realized_r, realized_pnl, fees, mfe_r, mae_r, bars_held, duration_s, close_reason, closed_at`
-- `positions(id, env, signal_id, symbol, strategy, side, entry_price, qty, remaining_qty, sl_price, tp_price, tp1_price, tp1_done, highest_high, lowest_low, bars_held, state, opened_at, closed_at, close_reason, pnl, r_multiple, meta)`
-- `orders(id, env, exchange_order_id, order_list_id, position_id, symbol, type, side, price, stop_price, qty, status, created_at, updated_at, raw)`
+- `positions(id, mode, signal_id, symbol, strategy, side, entry_price, qty, remaining_qty, sl_price, tp_price, tp1_price, tp1_done, highest_high, lowest_low, bars_held, state, opened_at, closed_at, close_reason, pnl, r_multiple, meta)`
+- `orders(id, mode, exchange_order_id, order_list_id, position_id, symbol, type, side, price, stop_price, qty, status, created_at, updated_at, raw)`
 - `fills(id, order_id, price, qty, fee, fee_asset, ts)`
-- `equity_snapshots(ts, env, balance_quote, unrealised, drawdown_pct)` — hourly + on every close
+- `equity_snapshots(ts, mode, balance_quote, unrealised, drawdown_pct)` — hourly + on every close
 - `backtest_runs(id, strategy, symbol, timeframe, params, from_ts, to_ts, metrics, created_at)` + `backtest_trades(run_id, …same columns as a closed signal…)` so backtest and live trades are compared with the same queries
 - `risk_events(id, ts, env, type, detail)` — pauses, kill switches, reconciliation mismatches
 - `schema_migrations(name, applied_at)`
 
 ### SQL views for the dashboard
 
-- `v_strategy_scorecard`: per strategy × symbol × env: trades, win rate, expectancy (avg R), profit factor, avg MFE of losers, avg MAE of winners, median time to TP1, max drawdown.
+- `v_strategy_scorecard`: per strategy × symbol × mode: trades, win rate, expectancy (avg R), profit factor, avg MFE of losers, avg MAE of winners, median time to TP1, max drawdown.
 - `v_open_positions`: with live unrealised R and distance to SL/TP.
-- `v_daily_pnl`: per env per UTC day.
+- `v_daily_pnl`: per mode per UTC day.
 - `v_rejected_would_have_won`: rejected signals whose TP would have been hit before SL on subsequent candles (computed by a nightly Python job).
 
 ### Dashboard pages
 
-1. **Overview** — equity curve, today's PnL vs the 3% limit, open positions with SL/TP lines, engine status (env, paused?, last candle, last heartbeat).
-2. **Journal** — every signal, filterable by strategy/symbol/outcome, expandable "why" panel with indicator snapshot and a mini-chart of the trade.
-3. **Scorecard** — the view above as a table plus R-distribution histogram per strategy.
-4. **Backtests** — runs list, metrics, equity curves, side-by-side with live results for the same window.
-5. **Controls** — pause / resume / close position / close all / kill; also available as Telegram commands `/status /pause /resume /close SYMBOL /kill`.
+1. **Chart** — a candlestick chart drawn from our own candles table (TradingView Lightweight Charts, open source), updating live over the dashboard WebSocket. Overlays: a marker on every candle where a signal fired (hover shows the reason), entry / stop / TP1 / TP2 lines for signals in flight, the trailing-stop path as it moved, and the support and resistance levels the strategy detected. Symbol and timeframe selectable from the configured set. A link opens the same symbol on TradingView for manual analysis; Binance itself cannot be embedded because it blocks iframes.
+2. **Overview** — equity curve, today's PnL vs the 3% limit, open positions with SL/TP lines, engine status (mode, paused?, last candle, last heartbeat).
+3. **Journal** — every signal, filterable by strategy/symbol/outcome, expandable "why" panel with indicator snapshot and a mini-chart of the trade (same chart component, zoomed to the trade).
+4. **Scorecard** — the view above as a table plus R-distribution histogram per strategy.
+5. **Backtests** — runs list, metrics, equity curves, side-by-side with live results for the same window; backtest trades can be replayed on the Chart page.
+6. **Controls** — pause / resume / close position / close all / kill; also available as Telegram commands `/status /pause /resume /close SYMBOL /kill`.
 
 ### Message contracts
 
@@ -178,19 +180,20 @@ Three Redis streams, each with a versioned JSON Schema in `packages/contracts` f
 
 ## MVP scope and phase order
 
-**MVP = one strategy (S1), one symbol (BTCUSDT), paper mode, fully journaled, Telegram-supervised.** Everything else is layered on after the MVP has run for two weeks.
+**MVP = shadow mode: one strategy (S1) on one symbol (BTCUSDT), no orders, every buy point and projected sell point marked in the database and followed to its outcome, viewed on a dashboard and pushed to Telegram.** Execution (paper wallet, testnet, live) comes only after the shadow journal has been reviewed for at least two weeks.
 
-| Milestone          | Deliverable                                                                                                                                          | Done when                                                                                                           |
-| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| M0 Scaffold        | repo layout, docker compose, migrations, contracts codegen, CI lint/test                                                                             | `pnpm test` and `pytest` green on an empty project                                                                  |
-| M1 Data            | `research ingest` for BTCUSDT 15m + 1h since 2023; engine streams live candles into the same table                                                   | Python and TS read the same row for the same open_time                                                              |
-| M2 Backtest        | exit policy (Py + TS, shared fixtures), S1 strategy, event-driven backtester with fees/slippage, metrics, walk-forward split, `backtest_runs` stored | S1 beats buy-and-hold and random-entry baselines out-of-sample after fees, or we iterate on S1 before going further |
-| M3 Paper live      | signal runner → Redis → engine paper adapter → positions/orders/journal → Telegram alerts + commands                                                 | 2 weeks of paper trades; paper results match a backtest over the same window                                        |
-| M4 Dashboard v1    | Overview + Journal + Scorecard (read-only), controls via Telegram                                                                                    | you can review a week of trades without opening a terminal                                                          |
-| M5 Testnet         | Binance spot adapter, OCO placement/replace, user data stream, reconciliation                                                                        | kill the engine mid-position, confirm exchange stop survives, restart re-adopts it                                  |
-| M6 Live small      | `BINANCE_ENV=live`, small capital, 1%/3% limits enforced                                                                                             | one month live with journal reviewed weekly                                                                         |
-| M7 More strategies | S2, S3, parameter optimisation, `v_rejected_would_have_won` job                                                                                      | each strategy has its own scorecard                                                                                 |
-| M8 Futures         | futures adapter, shorts, leverage cap, liquidation check                                                                                             | strategy/exit code unchanged                                                                                        |
+| Milestone | Deliverable | Done when |
+| --- | --- | --- |
+| M0 Scaffold | repo layout, docker compose, migrations, contracts codegen, strategy config file, CI lint/test | tests green on an empty project |
+| M1 Data | historical ingest for the configured symbol and timeframes; engine streams live candles into the same table | Python and TS read the same row for the same candle time |
+| M2 Backtest | exit policy (Python + TS, shared fixtures), S1 strategy, event-driven backtester with fees and slippage, metrics, walk-forward split, results stored | S1 beats buy-and-hold and random-entry baselines out-of-sample after fees, or we iterate on S1 first |
+| M3 Shadow live | signal runner writes signals and publishes them; engine in shadow mode follows each signal on live candles with the exit policy and marks the hypothetical outcome; Telegram notification at signal, TP1, stop, trailing moves and close | two weeks of shadow signals; shadow outcomes match a backtest over the same window |
+| M4 Dashboard v1 | Overview, Journal, Scorecard pages over the shadow journal; pause/resume via Telegram | you can review a week of signals without opening a terminal |
+| M5 Paper wallet | simulated balance, fees, slippage, sizing, equity snapshots, daily-loss pause | paper equity curve reproduces the shadow journal's R values |
+| M6 Testnet | Binance spot adapter, two-OCO protection, cancel/replace, user data stream, reconciliation | kill the engine mid-position, confirm exchange stop survives, restart re-adopts it |
+| M7 Live small | live keys, small capital, 1%/3% limits enforced | one month live with journal reviewed weekly |
+| M8 More strategies | S2, S3, extra timeframe instances, parameter optimisation, rejected-would-have-won job, Backtests and Controls pages | each strategy instance has its own scorecard |
+| M9 Futures | futures adapter, shorts, leverage cap, liquidation check | strategy and exit code unchanged |
 
 ---
 
@@ -198,7 +201,8 @@ Three Redis streams, each with a versioned JSON Schema in `packages/contracts` f
 
 - **Unit**: exit policy fixtures produce identical event streams in Python and TS; position sizing; precision rounding; contract validation both sides.
 - **Backtest sanity**: baselines (buy-and-hold, random entry with same exit policy) reproducible; strategy must beat both out-of-sample after fees.
-- **Integration**: `docker compose up` → ingest → backtest → run-live (paper) → position opens, trails, closes; journal row filled; Telegram messages received.
+- **Integration (shadow)**: start infra → ingest → backtest → run the signal runner and engine in shadow mode → a signal appears in the journal, is followed on live candles, closes with an outcome; Telegram messages received at each step.
+- **Integration (paper and up)**: same flow with a position opening, trailing and closing against the wallet or exchange.
 - **Testnet**: place / cancel / replace OCO; engine killed mid-position keeps exchange stop; restart reconciles.
 - **Ops**: engine under `pm2` or launchd; hourly heartbeat; alert if no candle for 3 minutes or no heartbeat for 10.
 
