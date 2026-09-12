@@ -1,0 +1,11 @@
+{
+  "name": "@trading/dashboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Telegram bot (M3) and Fastify API + React UI (M4).",
+  "scripts": {
+    "lint": "echo 'dashboard: nothing yet'",
+    "test": "echo 'dashboard: no tests yet'"
+  }
+}
