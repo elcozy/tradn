@@ -98,6 +98,19 @@ export const AppConfigSchema = z
       })
       .strict()
       .default({}),
+    /** Liquidity-filtered universe maintained by `research universe`; the engine only validates it. */
+    universe: z
+      .object({
+        pinned: z.array(z.string()).default([]),
+        min_volume_usd: z.number().default(10_000_000),
+        max_spread_pct: z.number().default(0.05),
+        lookback_days: z.number().int().default(30),
+        max_symbols: z.number().int().default(50),
+        exclude: z.array(z.string()).default([]),
+        template: z.string().default("s1_btc_15m"),
+      })
+      .strict()
+      .optional(),
   })
   .strict()
   .superRefine((cfg, ctx) => {
@@ -107,6 +120,11 @@ export const AppConfigSchema = z
       ids.add(s.id);
       if (!cfg.symbols.includes(s.symbol))
         ctx.addIssue({ code: "custom", message: `${s.id}: symbol ${s.symbol} not in symbols list` });
+    }
+    if (cfg.universe) {
+      for (const s of cfg.universe.pinned)
+        if (!cfg.symbols.includes(s)) ctx.addIssue({ code: "custom", message: `universe.pinned symbol ${s} not in symbols list` });
+      if (!ids.has(cfg.universe.template)) ctx.addIssue({ code: "custom", message: `universe.template ${cfg.universe.template} is not a strategy id` });
     }
   });
 

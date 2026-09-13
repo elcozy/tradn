@@ -42,6 +42,18 @@ module.exports = {
       error_file: path.join(__dirname, "logs/would-have-won.err.log"),
     },
     {
+      // Weekly (Monday 01:30 machine time): refresh the liquidity-filtered universe, backfill new coins,
+      // restart the readers if the config changed. Runs once when started, then on the cron.
+      name: "universe-refresh",
+      cwd: __dirname,
+      script: "scripts/universe-refresh.sh",
+      interpreter: "bash",
+      autorestart: false,
+      cron_restart: "30 1 * * 1",
+      out_file: path.join(__dirname, "logs/universe-refresh.out.log"),
+      error_file: path.join(__dirname, "logs/universe-refresh.err.log"),
+    },
+    {
       name: "signal-runner",
       cwd: path.join(__dirname, "services/research"),
       script: "uv",

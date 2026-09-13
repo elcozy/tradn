@@ -75,6 +75,19 @@ class PaperConfig(BaseModel):
     fee_pct: float = 0.1
 
 
+class UniverseConfig(BaseModel):
+    """Liquidity-filtered symbol universe maintained by `research universe` (see research/universe.py)."""
+
+    model_config = ConfigDict(extra="forbid")
+    pinned: list[str] = Field(default_factory=list)  # always kept, whatever their liquidity
+    min_volume_usd: float = 10_000_000  # average daily quote volume over lookback_days
+    max_spread_pct: float = 0.05  # best bid/ask spread at refresh time
+    lookback_days: int = 30
+    max_symbols: int = 50  # pinned + auto-added, sorted by volume
+    exclude: list[str] = Field(default_factory=list)  # base assets never traded (stablecoins, wrapped coins, ...)
+    template: str = "s1_btc_15m"  # instance copied for every auto-added symbol
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
     mode: Mode = "shadow"
@@ -85,6 +98,7 @@ class AppConfig(BaseModel):
     regime: RegimeConfig = Field(default_factory=RegimeConfig)
     risk: RiskConfig = Field(default_factory=RiskConfig)
     paper: PaperConfig = Field(default_factory=PaperConfig)
+    universe: UniverseConfig | None = None
 
     @model_validator(mode="after")
     def _consistent(self) -> AppConfig:
@@ -94,6 +108,12 @@ class AppConfig(BaseModel):
         for s in self.strategies:
             if s.symbol not in self.symbols:
                 raise ValueError(f"{s.id}: symbol {s.symbol} not in symbols list")
+        if self.universe is not None:
+            missing = [s for s in self.universe.pinned if s not in self.symbols]
+            if missing:
+                raise ValueError(f"universe.pinned symbols not in symbols list: {missing}")
+            if self.universe.template not in ids:
+                raise ValueError(f"universe.template {self.universe.template!r} is not a strategy id")
         return self
 
     @property

@@ -158,6 +158,127 @@ def compare(
 
 
 @app.command()
+def universe(
+    apply: bool = typer.Option(False, help="Write the new symbols line and UNIVERSE block into the config"),
+    ingest: bool = typer.Option(False, help="After --apply, backfill candles for newly added symbols"),
+    since: datetime = typer.Option("2021-04-01", help="History start for the backfill of new symbols"),
+) -> None:
+    """Refresh the liquidity-filtered symbol universe (pinned coins + every pair above the volume/spread bar)."""
+    from datetime import timedelta, timezone
+    from pathlib import Path
+
+    from .settings import settings
+    from .universe import refresh, report
+
+    path = Path(settings.strategy_config_path)
+    r = refresh(path)
+    cfg = load_config_for_report(path)
+    report(r, cfg.universe)  # type: ignore[arg-type]  # refresh() raised already if there is no universe block
+    if not apply:
+        console.print("[dim]dry run; add --apply to write the config[/]")
+        return
+    path.write_text(r.text, encoding="utf-8")
+    console.print(f"[green]wrote {path}[/]: {len(r.symbols)} symbols, {len(r.new_symbols)} new, {len(r.dropped)} dropped")
+    if ingest and r.new_symbols:
+        from .ingest import ingest as run_ingest
+
+        cfg = load_config_for_report(path)
+        u = cfg.universe
+        template = next(s for s in cfg.strategies if s.id == u.template)  # type: ignore[union-attr]
+        # full history for the timeframes the new instance trades on; other strategy timeframes get the
+        # ingest default lookback (a year); chart-only timeframes the chart lookback
+        deep = {template.entry_tf, template.regime_tf, template.range_tf} - {None}
+        chart_only = set(cfg.chart_timeframes) - set(cfg.strategy_timeframes)
+        for s in r.new_symbols:
+            for t in cfg.timeframes:
+                if t in chart_only:
+                    start = datetime.now(timezone.utc) - timedelta(days=cfg.chart_lookback_days)
+                else:
+                    start = since if t in deep else None
+                n = run_ingest(s, t, since=start)
+                console.print(f"[green]{s} {t}: wrote {n} candles[/]")
+    console.print("[bold]restart the engine, signal runner and dashboard to pick up the new symbols[/]")
+
+
+def load_config_for_report(path):
+    from .config import load_config
+
+    return load_config(path)
+
+
+@app.command()
+def label(
+    tf: str = typer.Option("15m", help="Entry timeframe to label"),
+    symbol: str = typer.Option(None, help="Comma-separated symbols (default: all from config)"),
+    side: str = typer.Option("both", help="long | short | both"),
+    stop_atr: float = typer.Option(1.0),
+    target_atr: float = typer.Option(2.0),
+    max_bars: int = typer.Option(24, help="Time limit in bars"),
+    since: datetime = typer.Option(None),
+    out: str = typer.Option("data/research", help="Parquet output directory (relative to the repo root)"),
+) -> None:
+    """Hindsight-label every bar (triple barrier) and snapshot its features; one parquet per symbol and side."""
+    from pathlib import Path
+
+    from . import db
+    from .config import load_config
+    from .features import features
+    from .labels import LabelParams
+    from .labels import label as label_bars
+    from .settings import REPO_ROOT, settings
+
+    cfg = load_config(settings.strategy_config_path)
+    symbols = [s.strip().upper() for s in symbol.split(",")] if symbol else cfg.symbols
+    sides = ["long", "short"] if side == "both" else [side]
+    out_dir = REPO_ROOT / out
+    out_dir.mkdir(parents=True, exist_ok=True)
+    btc_h1 = db.load_candles("BTCUSDT", "1h", since=since)
+    for s in symbols:
+        entry = db.load_candles(s, tf, since=since)
+        if len(entry) < 500:
+            console.print(f"[yellow]{s}: only {len(entry)} {tf} candles, skipped[/]")
+            continue
+        h1, h4, d1 = (db.load_candles(s, x, since=since) for x in ("1h", "4h", "1d"))
+        feats = features(entry, tf, h1=h1, h4=h4, d1=d1, btc_h1=btc_h1 if s != "BTCUSDT" else None)
+        for sd in sides:
+            p = LabelParams(side=sd, stop_atr=stop_atr, target_atr=target_atr, max_bars=max_bars)
+            lab = label_bars(entry, p)
+            joined = lab.join(feats, how="inner")
+            joined.insert(0, "symbol", s)
+            path = Path(out_dir) / f"{s}_{tf}_{p.tag}.parquet"
+            joined.to_parquet(path)
+            console.print(f"[green]{s} {tf} {sd}[/]: {len(joined):,} bars, exp {joined['realized_r'].mean():+.3f}R -> {path.name}")
+
+
+@app.command()
+def explain(
+    tf: str = typer.Option("15m"),
+    side: str = typer.Option("long", help="long | short"),
+    stop_atr: float = typer.Option(1.0),
+    target_atr: float = typer.Option(2.0),
+    max_bars: int = typer.Option(24),
+    min_n: int = typer.Option(3000, help="Minimum bars in a bucket before it is reported"),
+    data: str = typer.Option("data/research"),
+    out: str = typer.Option("docs/research", help="Report directory (relative to the repo root)"),
+) -> None:
+    """Rank the conditions that preceded good trades, from the parquet files written by `research label`."""
+    import pandas as pd
+
+    from .explain import report
+    from .labels import LabelParams
+    from .settings import REPO_ROOT
+
+    p = LabelParams(side=side, stop_atr=stop_atr, target_atr=target_atr, max_bars=max_bars)
+    files = sorted((REPO_ROOT / data).glob(f"*_{tf}_{p.tag}.parquet"))
+    if not files:
+        raise typer.BadParameter(f"no label files for {tf} {p.tag} in {data}; run `research label` first")
+    df = pd.concat([pd.read_parquet(f) for f in files])
+    console.print(f"{len(df):,} labelled bars from {len(files)} files")
+    path = report(df, side, tf, p.tag, min_n, REPO_ROOT / out)
+    console.print(f"[green]report -> {path}[/]")
+
+
+@app.command()
 def candles(symbol: str = typer.Option("BTCUSDT"), tf: str = typer.Option("15m"), last: int = typer.Option(5)) -> None:
     """Print the last N closed candles (cross-language check against `pnpm --filter @trading/engine candles`)."""
     from . import db

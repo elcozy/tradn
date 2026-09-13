@@ -41,6 +41,6 @@ def test_unknown_key_rejected(repo_root):
 
 def test_symbol_must_be_listed(repo_root):
     raw = yaml.safe_load((repo_root / "config" / "strategies.yaml").read_text())
-    raw["strategies"][0]["symbol"] = "ETHUSDT"
+    raw["strategies"][0]["symbol"] = "NOPEUSDT"
     with pytest.raises(ValueError, match="not in symbols"):
         AppConfig.model_validate(raw)

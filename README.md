@@ -64,6 +64,7 @@ Testnet kill test (M6 done criterion): open a position on testnet, `pm2 stop eng
 
 ```bash
 uv run --project services/research research ingest            # backfill candles for the configured symbols/timeframes
+uv run --project services/research research universe --apply --ingest  # refresh the liquidity-filtered symbol list by hand (the universe-refresh pm2 job does it weekly)
 uv run --project services/research research backtest s1_btc_15m   # full-history backtest, stored in backtest_runs
 uv run --project services/research research walkforward s1_btc_15m # rolling walk-forward over the strategy's small grid
 uv run --project services/research research optimize s2_btc_15m --trials 30  # optuna TPE per train window (uv sync --extra research)

@@ -35,7 +35,7 @@ describe("strategy config", () => {
   });
   it("rejects a strategy symbol not in the symbols list", () => {
     const r = raw();
-    r.strategies[0].symbol = "ETHUSDT";
+    r.strategies[0].symbol = "NOPEUSDT";
     expect(() => AppConfigSchema.parse(r)).toThrow(/not in symbols/);
   });
   it("rejects duplicate strategy ids", () => {
