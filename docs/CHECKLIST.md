@@ -70,4 +70,5 @@ Tick items as they are done. Every session starts by reading this file. Mileston
 ### M8 More strategies · M9 Futures
 
 - [x] S2 (`indicator_confluence`), S3 (`range`, 5m/15m/1h), second S1 instance by config (`s1_btc_1h`), optuna walk-forward (`research optimize`), nightly would-have-won job (`research would-have-won`, pm2 cron 00:30 UTC), Backtests page (runs, cumulative R, trades, would-have-won table) + Controls page
+- [x] Liquidity-filtered symbol universe (`research universe --apply --ingest`): 14 pinned coins + every USDT pair with 30-day volume > $10M and spread < 0.05%, one S1 instance each in the auto-generated block of `strategies.yaml`; first run 2026-09-13 added 17 coins (31 total). Refreshed weekly by the `universe-refresh` pm2 cron job (Monday 01:30), which restarts the readers when the config changed.
 - [ ] Futures adapter, shorts, leverage cap, liquidation check

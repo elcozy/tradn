@@ -108,6 +108,22 @@ Notes:
 - The engine only streams the timeframes the config uses: currently 1m, 5m, 15m, 1h and 4h. The 30m, 2h and 1d history is backfill for research; it does not grow live unless a strategy instance uses those timeframes or they are added to `chart_timeframes`.
 - The chart reads 1m, 5m, 15m, 1h and 4h straight from stored rows. It builds 3m from 1m, and 30m, 2h and 1d from 15m, so the stored 30m/2h/1d rows are not what the chart shows.
 
-## Symbols watched live
+## Symbols watched live: the universe
 
-The `symbols:` line in [config/strategies.yaml](../config/strategies.yaml) decides which coins the engine streams and the chart offers: the fourteen above. A coin is only evaluated for trades when it also has a strategy instance (an `- id:` block) in that file. History in `candles` is independent of both: any stored symbol can be backtested.
+The `symbols:` line in [config/strategies.yaml](../config/strategies.yaml) decides which coins the engine streams and the chart offers. A coin is only evaluated for trades when it also has a strategy instance (an `- id:` block) in that file. History in `candles` is independent of both: any stored symbol can be backtested.
+
+That line is maintained by `research universe` rather than by hand. It keeps two groups:
+
+1. **Pinned** (`universe.pinned`, the fourteen coins above) and any coin with a hand-written instance — always kept, whatever their liquidity.
+2. **Auto-added**: every other active Binance spot USDT pair with a 30-day average daily volume above `min_volume_usd` ($10M), a best bid/ask spread below `max_spread_pct` (0.05%), and at least 30 days of history. Each gets a copy of the `template` instance (`s1_btc_15m`) in the UNIVERSE block near the bottom of the file, up to `max_symbols` (50).
+
+Stablecoins, fiat, gold and wrapped/staked duplicates are in `universe.exclude`. Binance's tokenized stocks (`NVDAB`, `TSLAB`, …) are not distinguishable in `exchangeInfo`; they are far below the volume bar today, and every run prints its NEW symbols for review.
+
+```bash
+uv run --project services/research research universe                 # dry run: table of what would change
+uv run --project services/research research universe --apply --ingest  # write the config, backfill the new coins
+```
+
+Refreshed weekly by the `universe-refresh` pm2 job (Monday 01:30, machine time), which also restarts the engine, signal runner and dashboard when the config changed. A coin that falls below the bar drops out of the UNIVERSE block on the next `--apply`; pinned coins never do. `--ingest` backfills 15m and 1h from `--since` (default 2021-04-01) for new coins, the other strategy timeframes for a year, and 1m for the chart lookback; 30m/2h/1d research history is not loaded for auto-added coins.
+
+First run, 2026-09-13: 17 coins added — ETH, ZEC, SUI, UNI, NEAR, XPL, PUMP, U, WLD, TAO, DASH, LTC, AAVE, ALLO, BCH, ONDO, PENGU — for 31 in total. Notable rejections: PEPE (spread 0.29%: a price of a few millionths makes one tick a large fraction of it), ARB and FET (spread just over 0.05%), DOT and INJ (volume just under $10M).

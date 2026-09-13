@@ -147,7 +147,9 @@ Reference implementation in Python; identical port in TypeScript; both run the s
 
 Binance **spot** klines, public endpoint (no keys), stored in `candles` and backfilled by `research ingest`. Status as of 2026-09-13; full counts and commands in [DATA.md](DATA.md).
 
-**Coins** (14, all watched live and each with an S1 instance in `config/strategies.yaml`):
+**Universe.** The bot does not watch every Binance pair: of ~400 crypto USDT pairs the median trades $0.4M a day with a 0.15% spread, which is a guaranteed ~−0.3R per trade before the strategy gets a vote. `research universe` keeps the fourteen pinned coins below plus every pair whose 30-day average volume is above $10M with a spread under 0.05% (about 30 coins in total, refreshed weekly by a pm2 cron job; details in [DATA.md](DATA.md)). More liquid coins means more signals for the journal without paying the spread tax.
+
+**Pinned coins** (14, always watched, each with a hand-written S1 instance in `config/strategies.yaml`):
 
 | coin | history from | why that date |
 |---|---|---|
