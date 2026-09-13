@@ -160,8 +160,7 @@ Binance **spot** klines, public endpoint (no keys), stored in `candles` and back
 
 | timeframe | depth | purpose |
 |---|---|---|
-| 15m, 30m, 2h, 4h, 1d | every coin, from the date above to now, no gaps | backtesting and walk-forward across five years of bull, bear and range markets |
-| 1h | original ten coins since 2023-01-01; SHIB, ENA, C98, ALICE only ~500 bars (from 2026-08-23) | S1/S2 regime filter |
+| 15m, 30m, 1h, 2h, 4h, 1d | every coin, from the date above to now | backtesting and walk-forward across five years of bull, bear and range markets; 1h is also the S1/S2 regime filter |
 | 1m | original ten coins since 2023-01-01; the four new coins ~500 bars | dashboard chart |
 | 5m | BTCUSDT since 2025-01-01; other coins ~500 bars | S3 entries |
 
@@ -169,8 +168,9 @@ Rules for this data:
 
 - History is written by Python (`research ingest`); the TypeScript engine only appends live closed candles and gap-fills after a disconnect. Same upsert rule on both sides.
 - The engine streams only the timeframes strategies or the chart use (currently 1m, 5m, 15m, 1h, 4h), so 30m, 2h and 1d stop growing after the backfill unless re-ingested or put to use.
-- **Gap to close before 2021 backtests:** S1 and S2 need the 1h regime timeframe, which only reaches 2023-01-01 (original ten) or 2026-08-23 (SHIB, ENA, C98, ALICE). A backtest can start no earlier than its regime data allows. Fix: `research ingest --symbol <all 14> --tf 1h --since 2021-04-01` (about 48,000 rows per coin, a few minutes in total).
+- S1/S2 backtests can start at each coin's history date: the 1h regime data reaches back as far as the 15m entries. The first usable signal comes about 40 days later, once the 200-bar EMA and the 30-day level lookback have warmed up.
 - Re-running ingest is safe and idempotent; it fills backwards to `--since` and forwards to the last closed candle.
+- The only missing candles are Binance exchange-wide downtime: 12 hours between 2021-04-20 and 2023-03-24, the same for every coin listed at the time. Exact hours are in [DATA.md](DATA.md).
 
 ### Tables (Postgres / TimescaleDB, one `mode` column = shadow | paper | testnet | live on every row the engine writes)
 

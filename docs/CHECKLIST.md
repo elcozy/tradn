@@ -22,7 +22,7 @@ Tick items as they are done. Every session starts by reading this file. Mileston
 - [x] Python `ingest` (resumable, idempotent upsert, skips the still-open candle) for every timeframe in the config
 - [x] BTCUSDT 15m + 1h since 2023-01-01 ingested; row counts sanity-checked
 - [x] 2026-09-13: 14 coins × 15m/30m/2h/4h/1d since 2021-04-01 (or listing date) ingested, no gaps; see [DATA.md](DATA.md)
-- [ ] 1h since 2021-04-01 for all 14 coins, so S1/S2 backtests can start in 2021
+- [x] 1h since 2021-04-01 (or listing date) for all 14 coins, so S1/S2 backtests can start in 2021
 - [x] TS engine: config, logger, DB, kline WS for the configured timeframes with reconnect + watchdog, upsert closed candles
 - [x] Same-row check across languages
 

@@ -93,12 +93,12 @@ Other timeframes already in the table (as of 2026-09-13):
 | timeframe | original ten coins | SHIB, ENA, C98, ALICE |
 |---|---|---|
 | 1m | since 2023-01-01 (1,945,314 each) | engine bootstrap only (~500 bars, from 2026-09-12) |
-| 1h | since 2023-01-01 (32,422 each) | engine bootstrap only (500 bars, from 2026-08-23) |
+| 1h | since 2021-04-01 (47,771 each) | ALICE since 2021-04-01 (47,771); SHIB since 2021-05-10 (46,829); C98 since 2021-07-23 (45,052); ENA since 2024-04-02 (21,447) |
 | 5m | BTCUSDT since 2025-01-01 (178,550); others ~500 bars from 2026-09-11 | ~500 bars from 2026-09-11 |
 
-**Gap:** S1 and S2 backtests need 1h regime candles, so with 1h starting in 2023 (or 2026-08 for the four new coins) they cannot start in 2021 yet. Close it with `research ingest --symbol <all 14> --tf 1h --since 2021-04-01` (about 48,000 rows per coin). 1m depth for the new coins is optional and large (about 1.9M rows per coin since 2023).
+1h was backfilled from 2021-04-01 on 2026-09-13, so S1/S2 backtests (which need 1h regime candles) can start at each coin's history date. 1m depth for the four new coins is optional and large: `research ingest --symbol SHIBUSDT,ENAUSDT,C98USDT,ALICEUSDT --tf 1m --since 2023-01-01` adds about 1.9M rows per coin.
 
-Identical counts across the eleven full-history coins mean no gaps.
+**Missing candles:** the only gaps are Binance exchange-wide downtime, identical for every coin listed at the time. For 1h that is 12 bars in total (open times, UTC): 2021-04-20 02:00 and 03:00; 2021-04-25 05:00–07:00; 2021-08-13 02:00–05:00; 2021-09-29 07:00 and 08:00; 2023-03-24 13:00. BTCUSDT 15m is missing 59 slots, consistent with the same outages plus halts shorter than an hour.
 
 Notes:
 
