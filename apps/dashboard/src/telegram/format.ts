@@ -27,7 +27,10 @@ export function formatEvent(ev: EngineEvent): string | null {
         `projected ${typeof d["projected_r"] === "number" ? r(d["projected_r"] as number) : "?"}${ev.reason ? `  ·  ${esc(ev.reason)}` : ""}`,
       ].join("\n");
     case "tp_partial":
-      return `${tag} 🎯 TP1 hit ${sym} @ ${money(ev.price)} (sold ${ev.qty?.toPrecision(4)})`;
+      // tp1_fraction 0 (S4 runner exits): nothing is sold at +1R, the trailing stop is armed from here
+      return ev.qty
+        ? `${tag} 🎯 TP1 hit ${sym} @ ${money(ev.price)} (sold ${ev.qty.toPrecision(4)})`
+        : `${tag} 🎯 +1R reached ${sym} @ ${money(ev.price)} — trailing stop armed`;
     case "sl_moved":
       return `${tag} 🔒 stop → ${money(ev.sl_price)} ${sym} (${esc(ev.reason)})`;
     case "tp_moved":

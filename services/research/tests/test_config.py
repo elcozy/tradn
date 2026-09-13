@@ -7,7 +7,7 @@ from research.config import AppConfig, load_config
 def test_repo_config_loads(repo_root):
     cfg = load_config(repo_root / "config" / "strategies.yaml")
     assert cfg.mode == "shadow"
-    assert cfg.enabled_strategies[0].id == "s1_btc_15m"
+    assert cfg.enabled_strategies[0].id == "s4_btc_15m"  # S1/S2/S3 are disabled since 2026-09-13
     assert cfg.strategy_timeframes == ["5m", "15m", "1h", "4h"]  # S3 5m/15m/1h, S1 15m/1h and 1h/4h, S2 15m/1h
     assert cfg.timeframes == ["1m", "5m", "15m", "1h", "4h"]
     assert cfg.chart_timeframes == ["1m"]
@@ -43,4 +43,16 @@ def test_symbol_must_be_listed(repo_root):
     raw = yaml.safe_load((repo_root / "config" / "strategies.yaml").read_text())
     raw["strategies"][0]["symbol"] = "NOPEUSDT"
     with pytest.raises(ValueError, match="not in symbols"):
+        AppConfig.model_validate(raw)
+
+
+def test_universe_templates_must_exist(repo_root):
+    import yaml
+
+    from research.config import AppConfig
+
+    raw = yaml.safe_load((repo_root / "config" / "strategies.yaml").read_text())
+    assert AppConfig.model_validate(raw).universe.template_ids == ["s4_btc_15m"]
+    raw["universe"]["templates"] = ["s1_btc_15m", "nope"]
+    with pytest.raises(ValueError, match="nope"):
         AppConfig.model_validate(raw)

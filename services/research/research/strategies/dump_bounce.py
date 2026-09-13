@@ -47,7 +47,12 @@ class DumpBounce(Strategy):
         "ret_max_pct": ("float", -10.0, -2.0), "atr_min_pct": ("float", 1.0, 3.0),
         "stop_atr_k": ("float", 1.5, 3.0), "r_mult": ("float", 1.5, 3.0),
     }
-    EXIT_SEARCH_SPACE: ClassVar[SearchSpace] = {"max_bars": ("int", 24, 96)}
+    # exits: when trailing starts (tp1_r, with tp1_fraction 0 nothing is sold there), how tight it trails, whether the
+    # stop moves to breakeven (99 = never), whether the target ratchets, and the time limit
+    EXIT_SEARCH_SPACE: ClassVar[SearchSpace] = {
+        "tp1_r": ("float", 0.5, 2.0), "trail_atr_k": ("cat", [None, 1.5, 2.5, 4.0]), "breakeven_r": ("cat", [1.0, 99.0]),
+        "tp_ratchet_atr": ("cat", [None, 1.0]), "max_bars": ("int", 24, 96),
+    }
     WALK_FORWARD_GRID: ClassVar[dict[str, list]] = {"ret_max_pct": [-3.0, -5.0, -8.0], "atr_min_pct": [1.5, 2.0]}
     WALK_FORWARD_EXIT_GRID: ClassVar[dict[str, list]] = {}
 

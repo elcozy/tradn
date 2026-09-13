@@ -124,8 +124,10 @@ def test_backtest_end_to_end(cfg, s4):
     i = e.index.get_loc(t.ts)
     assert k - 60 <= i <= k  # fires the first bar the 24h return is through -5%, i.e. during the slide, not after it
     assert t.actual_entry == pytest.approx(float(e["open"].iloc[i + 1]) * (1 + cfg.paper.slippage_pct / 100))
-    assert t.close_reason == "take_profit" and t.outcome == "win" and t.bars_held <= s4.exit.max_bars
-    assert t.realized_r == pytest.approx(2.0, abs=0.1)  # pure barrier exit: +2R minus fees, no partial TP1
+    assert t.outcome == "win" and t.bars_held <= s4.exit.max_bars
+    # runner exits (config): nothing sold at +1R, stop trails 2.5 ATR and the target ratchets, so the trade ends on the
+    # trailing stop, the (ratcheted) target or the 24h clock, well above +1R on this synthetic recovery
+    assert t.close_reason in {"take_profit", "trailing", "time"} and t.realized_r > 1.0
     assert set(out.skip_reasons) <= {"warmup", "no_dump", "atr_too_low", "risk_too_wide", "fees_vs_risk", "gap_at_fill"}
 
 
@@ -152,3 +154,16 @@ def test_instance_for_other_symbol(cfg):
         instance_for(cfg, "s4_btc_15m", "NOPEUSDT")
     with pytest.raises(ValueError):
         instance_for(cfg, "nope", None)
+
+
+def test_optimize_searches_trailing_exits(cfg, s4):
+    """The exit search space (trailing stop, breakeven, ratchet, time limit) round-trips through optuna, None included."""
+    pytest.importorskip("optuna")
+    from research.backtest.optimize import optimize
+
+    e, _ = dump_series(n=96 * 120, k=96 * 100)
+    res = optimize(cfg, s4, e, resample(e, "1h"), trials=3, train_days=60, test_days=30)
+    assert res["windows"]
+    ex = res["windows"][0]["exit"]
+    assert set(ex) == {"tp1_r", "trail_atr_k", "breakeven_r", "tp_ratchet_atr", "max_bars"}
+    assert ex["trail_atr_k"] in (None, 1.5, 2.5, 4.0) and ex["breakeven_r"] in (1.0, 99.0) and 24 <= ex["max_bars"] <= 96

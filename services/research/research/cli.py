@@ -169,11 +169,12 @@ def optimize(
     train_days: int = typer.Option(180),
     test_days: int = typer.Option(60),
     seed: int = typer.Option(0, help="TPE sampler seed (same seed, same study)"),
+    symbol: str = typer.Option(None, help="Run the instance on another symbol"),
 ) -> None:
     """Walk-forward with an optuna TPE study per train window over the strategy's SEARCH_SPACE (needs `uv sync --extra research`)."""
     from .backtest.optimize import optimize as _optimize
 
-    cfg, inst, (entry_df, regime_df, range_df) = _instance_and_frames(strategy_id, since)
+    cfg, inst, (entry_df, regime_df, range_df) = _instance_and_frames(strategy_id, since, symbol)
     res = _optimize(cfg, inst, entry_df, regime_df, range_df, trials=trials, train_days=train_days, test_days=test_days, seed=seed)
     _print_windows(res)
 

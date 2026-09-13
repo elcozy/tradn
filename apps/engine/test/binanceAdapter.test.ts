@@ -12,6 +12,7 @@ import { RestError, RestErrorKind } from "../src/execution/binance/rest.js";
 import { PositionManager } from "../src/positions/manager.js";
 import { MemoryPositionStore } from "../src/positions/store.js";
 import { FakeBinance } from "./fakeBinance.js";
+import { withFixtureStrategyEnabled } from "./testConfig.js";
 
 const filters = new Map([["BTCUSDT", { tickSize: "0.01", stepSize: "0.00001", minQty: "0.00001", minNotional: "5" }]]);
 const sig = { symbol: "BTCUSDT" } as Signal;
@@ -186,7 +187,7 @@ describe("BinanceSpotAdapter", () => {
 });
 
 describe("PositionManager over the Binance adapter (testnet flow)", () => {
-  const cfg = { ...parseAppConfig(readFileSync(resolve(REPO_ROOT, "config/strategies.yaml"), "utf8")), mode: "testnet" as const };
+  const cfg = { ...withFixtureStrategyEnabled(parseAppConfig(readFileSync(resolve(REPO_ROOT, "config/strategies.yaml"), "utf8"))), mode: "testnet" as const };
   const fixture = JSON.parse(readFileSync(resolve(REPO_ROOT, "packages/contracts/fixtures/signal.valid.json"), "utf8"));
   let t = 0;
   const candle = (o: { open: number; high: number; low: number; close: number }, tf = "15m"): Candle => {

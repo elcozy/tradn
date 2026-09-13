@@ -4,8 +4,9 @@ import { describe, expect, it } from "vitest";
 import { SignalSchema } from "@trading/contracts";
 import { REPO_ROOT, parseAppConfig } from "../src/config.js";
 import { RejectReason, checkSignal, type RiskContext } from "../src/risk/riskManager.js";
+import { withFixtureStrategyEnabled } from "./testConfig.js";
 
-const cfg = parseAppConfig(readFileSync(resolve(REPO_ROOT, "config/strategies.yaml"), "utf8"));
+const cfg = withFixtureStrategyEnabled(parseAppConfig(readFileSync(resolve(REPO_ROOT, "config/strategies.yaml"), "utf8")));
 const sig = SignalSchema.parse(JSON.parse(readFileSync(resolve(REPO_ROOT, "packages/contracts/fixtures/signal.valid.json"), "utf8")));
 const base = (): RiskContext => ({
   now: new Date(new Date(sig.ts).getTime() + 60_000),

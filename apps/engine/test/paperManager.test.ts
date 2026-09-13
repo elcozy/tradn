@@ -11,8 +11,9 @@ import { MemoryWalletStore, PaperWallet } from "../src/execution/wallet.js";
 import { PositionManager } from "../src/positions/manager.js";
 import { MemoryPositionStore, RiskEventType } from "../src/positions/store.js";
 import { RejectReason } from "../src/risk/riskManager.js";
+import { withFixtureStrategyEnabled } from "./testConfig.js";
 
-const cfg = { ...parseAppConfig(readFileSync(resolve(REPO_ROOT, "config/strategies.yaml"), "utf8")), mode: "paper" as const };
+const cfg = { ...withFixtureStrategyEnabled(parseAppConfig(readFileSync(resolve(REPO_ROOT, "config/strategies.yaml"), "utf8"))), mode: "paper" as const };
 const fixture = JSON.parse(readFileSync(resolve(REPO_ROOT, "packages/contracts/fixtures/signal.valid.json"), "utf8"));
 const btcFilters = { tickSize: "0.01", stepSize: "0.00001", minQty: "0.00001", minNotional: "5" };
 
@@ -95,6 +96,30 @@ describe("PositionManager (paper)", () => {
     expect(qty).toBe(p.state.qty);
     // equity snapshot written on close
     expect((await pm.snapshotEquity())!.balance_quote).toBeCloseTo(wallet.cash, 8);
+  });
+
+  it("tp1_fraction 0 (S4 runner exits): nothing is sold at +1R, the trail arms, the wallet is untouched until the close", async () => {
+    const runner = SignalSchema.parse({ ...fixture, exit: { ...fixture.exit, tp1_fraction: 0, breakeven_r: 99, trail_atr_k: 2.5 } });
+    await pm.handleSignal(runner, { paused: false, newsBlock: false });
+    await pm.onCandleClosed(candle({ open: 61250, high: 61300, low: 61200, close: 61280 }));
+    const p = pm.activePositions[0]!;
+    const qty = p.state.qty;
+    const feesAfterEntry = p.fees_paid;
+    const cashAfterEntry = wallet.cash;
+    await pm.onCandleClosed(candle({ open: 61300, high: 61900, low: 61250, close: 61850 })); // through tp1
+    const partial = sink.ofType(EngineEventType.TpPartial);
+    expect(partial).toHaveLength(1);
+    expect(partial[0]!.qty).toBe(0);
+    expect(p.state.remaining_qty).toBe(qty); // nothing sold
+    expect(p.fees_paid).toBe(feesAfterEntry); // no fill, no fee
+    expect(wallet.cash).toBe(cashAfterEntry);
+    expect(p.state.state).toBe("trailing");
+    const sl = p.state.sl;
+    expect(sl).toBeGreaterThan(p.state.sl_initial); // trail moved the stop up
+    await pm.onCandleClosed(candle({ open: 61850, high: 61860, low: sl - 1, close: sl }));
+    const o = store.outcomes.get(runner.id)!;
+    expect(o.close_reason).toBe("trailing");
+    expect(wallet.cash - 10_000).toBeCloseTo(o.realized_pnl, 6);
   });
 
   it("records a daily-loss risk event once and a cooldown event after N consecutive losses", async () => {

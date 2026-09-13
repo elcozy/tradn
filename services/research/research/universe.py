@@ -3,7 +3,8 @@ for the strategy's edge to survive fees and slippage.
 
 `research universe` measures every active pair (average daily quote volume over `lookback_days`, best
 bid/ask spread now), keeps the pinned symbols and the hand-written instances whatever their numbers,
-adds every other pair that clears `min_volume_usd` and `max_spread_pct`, and rewrites two places in
+adds every other pair that clears `min_volume_usd`, `max_spread_pct` and `min_age_days` (one copy of each
+template instance per symbol), and rewrites two places in
 config/strategies.yaml: the `symbols:` line and the auto-generated instance block between the
 UNIVERSE markers. Everything else in the file (comments, hand-written instances) is left untouched.
 """
@@ -203,10 +204,10 @@ def refresh(path: Path, ex: Market | None = None, sleep: bool = True) -> Refresh
             kept.append(s)
     candidates = scan(ex or make_market(), u, sleep=sleep)
     sel = select(kept, candidates, u)
-    template = next(s for s in cfg.strategies if s.id == u.template)
+    templates = [next(s for s in cfg.strategies if s.id == t) for t in u.template_ids]
     added_symbols = [c.symbol for c in sel.added]
     symbols = kept + added_symbols
-    instances = render_instances(template, added_symbols)
+    instances = "\n".join(render_instances(t, added_symbols) for t in templates if added_symbols)
     stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
     new_text = rewrite_config(text, symbols, instances, stamp)
     before_auto = [s for s in cfg.symbols if s not in kept]

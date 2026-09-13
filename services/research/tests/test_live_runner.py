@@ -15,13 +15,14 @@ from .synth import candles, resample
 def cfg(repo_root):
     """Repo config narrowed to one strategy instance, so these tests do not depend on the symbol list."""
     full = load_config(repo_root / "config" / "strategies.yaml")
-    return full.model_copy(update={"strategies": full.strategies[:1], "symbols": [full.strategies[0].symbol]})
+    first = next(s for s in full.strategies if s.enabled)  # s4_btc_15m since S1/S2/S3 were disabled
+    return full.model_copy(update={"strategies": [first], "symbols": [first.symbol]})
 
 
 def test_signal_id_is_deterministic(cfg):
     inst = cfg.strategies[0]
     t = pd.Timestamp("2026-09-12 14:00", tz="UTC")
-    assert runner.signal_id(inst, t) == "s1_btc_15m:BTCUSDT:15m:2026-09-12T14:00:00Z"
+    assert runner.signal_id(inst, t) == f"{inst.id}:BTCUSDT:15m:2026-09-12T14:00:00Z" and inst.id == "s4_btc_15m"
 
 
 def test_build_signal_validates_against_contract(cfg):

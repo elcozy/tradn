@@ -74,5 +74,10 @@ Tick items as they are done. Every session starts by reading this file. Mileston
 - [x] Pattern research pipeline (`research label` → `explain` → `forward`, [DATA.md](DATA.md#pattern-research-what-preceded-good-trades)): hindsight triple-barrier labels + 31 features for the 14 pinned coins since 2021, six barrier settings, forward test split at 2024-01-01 with a per-year and per-coin robustness flag. Findings in [PLAN.md](PLAN.md#pattern-research-findings).
 - [x] S4 `dump_bounce` strategy class (two modes), `research backtest/walkforward --symbol all`, instances `s4_btc_15m` / `s4b_btc_15m` in config **disabled**. Backtest 2024→ on 32 coins: dump mode +0.159 R over 1,338 trades (profit factor 1.28); crash-bounce mode −0.03 R, dropped.
 - [x] S4 walk-forward on all 28 coins (after the one-year listing-age rule): +0.114 R over 2,637 out-of-sample trades, profit factor 1.20, 22 of 28 coins positive → `dump` instances enabled in shadow for the 14 pinned coins (`s4_*_15m`) on 2026-09-13
-- [ ] S4 shadow signals reproduce the backtester on the same bars (`research compare`), then paper
+- [x] S4 Optuna walk-forward (`scripts/s4-optimize.sh`): +0.042 R, worse than the fixed grid; parameters stay fixed. Exit variants with fixed entries (`scripts/s4-exit-variants.py`): runner exits (trail 2.5 ATR from +1R, target ratchets) adopted for the shadow instances
+- [x] S4 on all 28 coins via `universe.templates`; `engine-paper` started 2026-09-13 (paper equity curve beside the shadow journal)
+- [ ] S4 shadow signals reproduce the backtester on the same bars (`research compare --mode shadow`), and paper R equals backtest R (`research compare --mode paper`), after ~2 weeks (review ~2026-09-27)
+- [x] `daily-check` pm2 cron posts both compare results, paper equity and open positions to Telegram every morning (07:05)
+- [x] S1/S2/S3 disabled after losing on the 28-coin universe (S1 −0.36 R, S2 −0.16 R, S3 −0.56 R per trade, 2024→); S4 is the only enabled strategy and the only universe template
+- [x] Telegram alerts: keys in `.env` since 2026-09-13, process restarted; `scripts/notify.sh` for ad-hoc messages
 - [ ] Futures adapter, shorts, leverage cap, liquidation check

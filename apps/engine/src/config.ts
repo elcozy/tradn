@@ -109,6 +109,7 @@ export const AppConfigSchema = z
         max_symbols: z.number().int().default(50),
         exclude: z.array(z.string()).default([]),
         template: z.string().default("s1_btc_15m"),
+        templates: z.array(z.string()).default([]),
       })
       .strict()
       .optional(),
@@ -125,7 +126,9 @@ export const AppConfigSchema = z
     if (cfg.universe) {
       for (const s of cfg.universe.pinned)
         if (!cfg.symbols.includes(s)) ctx.addIssue({ code: "custom", message: `universe.pinned symbol ${s} not in symbols list` });
-      if (!ids.has(cfg.universe.template)) ctx.addIssue({ code: "custom", message: `universe.template ${cfg.universe.template} is not a strategy id` });
+      const templates = cfg.universe.templates.length ? cfg.universe.templates : [cfg.universe.template];
+      for (const t of templates)
+        if (!ids.has(t)) ctx.addIssue({ code: "custom", message: `universe template ${t} is not a strategy id` });
     }
   });
 

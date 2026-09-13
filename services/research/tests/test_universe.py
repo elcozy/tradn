@@ -136,7 +136,12 @@ def test_refresh_end_to_end(tmp_path, repo_root):
     assert r.symbols[:14] == load_config(p).symbols[:14]  # pinned order preserved
     p.write_text(r.text)
     cfg = load_config(p)  # the rewritten file validates in the strict loader
-    assert "ZZZUSDT" in cfg.symbols and any(s.id == "s1_zzz_15m" for s in cfg.strategies)
+    assert "ZZZUSDT" in cfg.symbols
+    for tid in cfg.universe.template_ids:  # every template in `templates` is copied
+        prefix = tid.split("_")[0]
+        copy = next(s for s in cfg.strategies if s.id == f"{prefix}_zzz_15m")
+        tpl = next(s for s in cfg.strategies if s.id == tid)
+        assert copy.type == tpl.type and copy.exit == tpl.exit and copy.enabled
     # a second refresh with ZZZ gone drops it again, hand-written instances untouched
     class Quiet(FakeMarket):
         def fetch_tickers(self):

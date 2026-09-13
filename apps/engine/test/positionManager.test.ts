@@ -9,8 +9,9 @@ import { ShadowAdapter } from "../src/execution/shadow.js";
 import { ExitReason } from "../src/positions/exitPolicy.js";
 import { PositionManager, closeReasonOf, outcomeOf } from "../src/positions/manager.js";
 import { MemoryPositionStore } from "../src/positions/store.js";
+import { withFixtureStrategyEnabled } from "./testConfig.js";
 
-const cfg = parseAppConfig(readFileSync(resolve(REPO_ROOT, "config/strategies.yaml"), "utf8"));
+const cfg = withFixtureStrategyEnabled(parseAppConfig(readFileSync(resolve(REPO_ROOT, "config/strategies.yaml"), "utf8")));
 const fixture = JSON.parse(readFileSync(resolve(REPO_ROOT, "packages/contracts/fixtures/signal.valid.json"), "utf8"));
 
 let t = new Date(fixture.ts).getTime();

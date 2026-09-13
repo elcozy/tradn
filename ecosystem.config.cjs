@@ -54,6 +54,16 @@ module.exports = {
       error_file: path.join(__dirname, "logs/universe-refresh.err.log"),
     },
     {
+      name: "daily-check",
+      cwd: __dirname,
+      script: "scripts/daily-check.sh",
+      interpreter: "bash",
+      autorestart: false,
+      cron_restart: "5 7 * * *",
+      out_file: path.join(__dirname, "logs/daily-check.out.log"),
+      error_file: path.join(__dirname, "logs/daily-check.err.log"),
+    },
+    {
       name: "signal-runner",
       cwd: path.join(__dirname, "services/research"),
       script: "uv",

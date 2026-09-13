@@ -10,8 +10,9 @@ import { PositionManager } from "../src/positions/manager.js";
 import { MemoryPositionStore } from "../src/positions/store.js";
 import { parseEntry } from "../src/signals/consumer.js";
 import { MemoryStateStore } from "../src/state.js";
+import { withFixtureStrategyEnabled } from "./testConfig.js";
 
-const cfg = parseAppConfig(readFileSync(resolve(REPO_ROOT, "config/strategies.yaml"), "utf8"));
+const cfg = withFixtureStrategyEnabled(parseAppConfig(readFileSync(resolve(REPO_ROOT, "config/strategies.yaml"), "utf8")));
 const cmd = (type: string) => EngineCommandSchema.parse({ v: 1, ts: new Date().toISOString(), source: "telegram", type });
 
 describe("commands", () => {

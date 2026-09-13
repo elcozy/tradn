@@ -12,7 +12,7 @@ describe("strategy config", () => {
   it("loads the repo config", () => {
     const cfg = parseAppConfig(text);
     expect(cfg.mode).toBe("shadow");
-    expect(enabledStrategies(cfg)[0]?.id).toBe("s1_btc_15m");
+    expect(enabledStrategies(cfg)[0]?.id).toBe("s4_btc_15m"); // S1/S2/S3 disabled since 2026-09-13
     const tfs = strategyTimeframes(cfg);
     expect(tfs).toEqual(expect.arrayContaining(["15m", "1h"]));
     expect(tfs).toEqual([...tfs].sort((a, b) => TIMEFRAME_MS[a] - TIMEFRAME_MS[b])); // fastest first

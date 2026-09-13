@@ -11,8 +11,9 @@ import { PositionManager } from "../src/positions/manager.js";
 import { MemoryPositionStore, RiskEventType } from "../src/positions/store.js";
 import { MemoryStateStore } from "../src/state.js";
 import { FakeBinance } from "./fakeBinance.js";
+import { withFixtureStrategyEnabled } from "./testConfig.js";
 
-const cfg = { ...parseAppConfig(readFileSync(resolve(REPO_ROOT, "config/strategies.yaml"), "utf8")), mode: "testnet" as const };
+const cfg = { ...withFixtureStrategyEnabled(parseAppConfig(readFileSync(resolve(REPO_ROOT, "config/strategies.yaml"), "utf8"))), mode: "testnet" as const };
 const fixture = JSON.parse(readFileSync(resolve(REPO_ROOT, "packages/contracts/fixtures/signal.valid.json"), "utf8"));
 const filters = new Map([["BTCUSDT", { tickSize: "0.01", stepSize: "0.00001", minQty: "0.00001", minNotional: "5" }]]);
 

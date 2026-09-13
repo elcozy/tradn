@@ -86,7 +86,12 @@ class UniverseConfig(BaseModel):
     min_age_days: int = 365  # a pair listed more recently than this is never auto-added (new listings trade differently)
     max_symbols: int = 50  # pinned + auto-added, sorted by volume
     exclude: list[str] = Field(default_factory=list)  # base assets never traded (stablecoins, wrapped coins, ...)
-    template: str = "s1_btc_15m"  # instance copied for every auto-added symbol
+    template: str = "s1_btc_15m"  # instance copied for every auto-added symbol ...
+    templates: list[str] = Field(default_factory=list)  # ... or several (one copy of each per symbol); overrides `template`
+
+    @property
+    def template_ids(self) -> list[str]:
+        return list(self.templates) if self.templates else [self.template]
 
 
 class AppConfig(BaseModel):
@@ -113,8 +118,9 @@ class AppConfig(BaseModel):
             missing = [s for s in self.universe.pinned if s not in self.symbols]
             if missing:
                 raise ValueError(f"universe.pinned symbols not in symbols list: {missing}")
-            if self.universe.template not in ids:
-                raise ValueError(f"universe.template {self.universe.template!r} is not a strategy id")
+            for t in self.universe.template_ids:
+                if t not in ids:
+                    raise ValueError(f"universe template {t!r} is not a strategy id")
         return self
 
     @property
