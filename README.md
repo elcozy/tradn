@@ -1,6 +1,6 @@
 # trading
 
-Local crypto day-trading automation. Python for research, backtesting and signals; TypeScript for the live engine, dashboard and Telegram. Docs in [docs/](docs/): [PLAN.md](docs/PLAN.md), [PLAN_BUILD.md](docs/PLAN_BUILD.md), [ARCHITECTURE.md](docs/ARCHITECTURE.md), [CHECKLIST.md](docs/CHECKLIST.md), [DECISIONS.md](docs/DECISIONS.md), [DATA.md](docs/DATA.md) (database tables and candle history).
+Local crypto day-trading automation. Python for research, backtesting and signals; TypeScript for the live engine, dashboard and Telegram. Docs in [docs/](docs/): [PLAN.md](docs/PLAN.md), [PLAN_BUILD.md](docs/PLAN_BUILD.md), [ARCHITECTURE.md](docs/ARCHITECTURE.md), [CHECKLIST.md](docs/CHECKLIST.md), [DECISIONS.md](docs/DECISIONS.md), [DATA.md](docs/DATA.md) (database tables and candle history), [GLOSSARY.md](docs/GLOSSARY.md) (every abbreviation: ATR, R, MFE, OOS…).
 
 ## Prerequisites
 

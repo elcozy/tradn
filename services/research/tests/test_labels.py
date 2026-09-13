@@ -75,7 +75,7 @@ def test_condition_and_pair_tables():
     rsi = rng.uniform(0, 100, n)
     # oversold bars are good, everything else slightly negative
     r = np.where(rsi < 25, rng.normal(0.4, 1, n), rng.normal(-0.1, 1, n))
-    df = pd.DataFrame({"symbol": np.where(np.arange(n) % 2 == 0, "AUSDT", "BUSDT"), "realized_r": r, "outcome": "x", "rsi": rsi,
+    df = pd.DataFrame({"symbol": np.where(np.arange(n) % 2 == 0, "AUSDT", "BUSDT"), "realized_r": r, "gross_r": r + 0.2, "outcome": "x", "rsi": rsi,
                        "bullish": (rng.uniform(size=n) > 0.5).astype(int)}, index=idx)
     b = bucketize(df)
     assert "rsi__b" in b and "bullish__b" in b

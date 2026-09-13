@@ -63,6 +63,7 @@ def _stats(g: pd.DataFrame, base: float, total: int) -> dict:
     by_year = g.groupby(g.index.year)["realized_r"].mean()
     return {
         "n": n, "coverage_pct": 100 * n / total, "win_rate": float((r > 0).mean()), "expectancy_r": float(r.mean()),
+        "gross_r": float(g["gross_r"].mean()),  # before fees: separates a pattern from a fee artifact
         "lift_r": float(r.mean() - base), "t_stat": float(r.mean() / sd * np.sqrt(n)) if sd and sd > 0 else 0.0,
         "coins_positive": float((by_coin > 0).mean()) if len(by_coin) else 0.0,
         "years_positive": float((by_year > 0).mean()) if len(by_year) else 0.0,
@@ -105,13 +106,12 @@ def pair_table(df: pd.DataFrame, single: pd.DataFrame, min_n: int, top_features:
 def _md_table(t: pd.DataFrame, n: int) -> str:
     if t.empty:
         return "_none_\n"
-    cols = ["feature", "bucket", "n", "coverage_pct", "win_rate", "expectancy_r", "lift_r", "t_stat", "coins_positive", "years_positive"]
-    head = "| " + " | ".join(["condition", "bucket", "n", "cov %", "win %", "exp R", "lift R", "t", "coins +", "years +"]) + " |\n"
-    head += "|" + "---|" * len(cols) + "\n"
+    head = "| condition | bucket | n | cov % | win % | net R | gross R | lift R | t | coins + | years + |\n"
+    head += "|" + "---|" * 11 + "\n"
     body = ""
     for _, r in t.head(n).iterrows():
         body += (f"| {r.feature} | {r.bucket} | {r.n:,} | {r.coverage_pct:.1f} | {100 * r.win_rate:.1f} | {r.expectancy_r:+.3f} | "
-                 f"{r.lift_r:+.3f} | {r.t_stat:.1f} | {100 * r.coins_positive:.0f}% | {100 * r.years_positive:.0f}% |\n")
+                 f"{r.gross_r:+.3f} | {r.lift_r:+.3f} | {r.t_stat:.1f} | {100 * r.coins_positive:.0f}% | {100 * r.years_positive:.0f}% |\n")
     return head + body
 
 
@@ -122,6 +122,8 @@ def report(df: pd.DataFrame, side: str, tf: str, params_tag: str, min_n: int, ou
     single = condition_table(b, min_n)
     pairs = pair_table(b, single, min_n * 2)
     base_r = df["realized_r"].mean()
+    base_gross = df["gross_r"].mean()
+    base_fee = df["fee_r"].mean()
     base_win = (df["realized_r"] > 0).mean()
     outcomes = df["outcome"].value_counts(normalize=True)
     per_coin = df.groupby("symbol")["realized_r"].agg(["count", "mean"]).sort_values("mean", ascending=False)
@@ -130,9 +132,9 @@ def report(df: pd.DataFrame, side: str, tf: str, params_tag: str, min_n: int, ou
     bad = single.sort_values("expectancy_r").head(top)
 
     md = [f"# What preceded good {'buys' if side == 'long' else 'sells'} — {tf} bars, {params_tag}", ""]
-    md += [f"Bars: {len(df):,} across {df['symbol'].nunique()} coins, {df.index.min().date()} → {df.index.max().date()}. "
-           f"Every bar is a hypothetical {side} entered at the next open; labels net of 0.1% fees per side and 0.05% slippage.", ""]
-    md += ["## Base rate", "", f"- expectancy **{base_r:+.3f} R** per bar, win rate {100 * base_win:.1f}%",
+    scope = f"Bars: {len(df):,} across {df['symbol'].nunique()} coins, {df.index.min().date()} → {df.index.max().date()}. "
+    md += [scope + f"Every bar is a hypothetical {side} entered at the next open; labels net of 0.1% fees per side and 0.05% slippage.", ""]
+    md += ["## Base rate", "", f"- expectancy **{base_r:+.3f} R** per bar net of fees ({base_gross:+.3f} R gross, fees {base_fee:.2f} R per trade), win rate {100 * base_win:.1f}%",
            "- outcomes: " + ", ".join(f"{k} {100 * v:.1f}%" for k, v in outcomes.items()),
            f"- a random entry loses about {-base_r:.2f} R on average; a condition is only interesting if its lift is well above that noise.", ""]
     md += ["## Robust single conditions (t ≥ 3, positive in ≥ 70% of coins and ≥ 70% of years)", "", _md_table(good, top)]
