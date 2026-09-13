@@ -87,11 +87,12 @@ def prepare_strategy(
 
 
 def registry() -> dict[str, type[Strategy]]:
+    from .dump_bounce import DumpBounce
     from .indicator_confluence import IndicatorConfluence
     from .range_grid import RangeGrid
     from .sr_bounce import SrBounce
 
-    return {cls.type: cls for cls in (SrBounce, IndicatorConfluence, RangeGrid)}
+    return {cls.type: cls for cls in (SrBounce, IndicatorConfluence, RangeGrid, DumpBounce)}
 
 
 def strategy_class(type_: str) -> type[Strategy]:

@@ -60,27 +60,54 @@ def backtest(
     since: datetime = typer.Option(None),
     until: datetime = typer.Option(None),
     save: bool = typer.Option(True, help="Store run + trades in the database"),
+    symbol: str = typer.Option(None, help="Run the instance on another symbol, a comma list, or 'all' (every configured symbol)"),
 ) -> None:
-    """Run the event-driven backtest for one strategy instance."""
-    from .backtest.runner import run_backtest
+    """Run the event-driven backtest for one strategy instance (or one instance across many symbols)."""
+    from .backtest.runner import pooled_summary, run_backtest
     from .config import load_config
     from .settings import settings
 
     cfg = load_config(settings.strategy_config_path)
-    result = run_backtest(cfg, strategy_id, since=since, until=until, save=save)
-    console.print(result.summary())
+    symbols = _symbols(cfg, symbol)
+    if symbols is None:
+        console.print(run_backtest(cfg, strategy_id, since=since, until=until, save=save).summary())
+        return
+    results = {}
+    for s in symbols:
+        try:
+            results[s] = run_backtest(cfg, strategy_id, since=since, until=until, save=save, symbol=s)
+        except RuntimeError as exc:
+            console.print(f"[yellow]{s}: {exc}[/]")
+            continue
+        m = results[s].metrics
+        console.print(f"{s:10} trades {m.get('trades', 0):4d}  win {m.get('win_rate') or 0:.0%}  exp {m.get('expectancy_r') or 0:+.3f}R  "
+                      f"sum {m.get('sum_r') or 0:+.1f}R  max DD {m.get('max_drawdown_r') or 0}R  avg bars {m.get('avg_bars_held') or 0}")
+    _, pooled = pooled_summary(results)
+    console.print(f"[bold]pooled ({len(results)} symbols):[/] trades {pooled.get('trades', 0)}  win {pooled.get('win_rate') or 0:.0%}  "
+                  f"exp {pooled.get('expectancy_r') or 0:+.3f}R  sum {pooled.get('sum_r') or 0:+.1f}R  max DD {pooled.get('max_drawdown_r')}R  "
+                  f"profit factor {pooled.get('profit_factor')}  close reasons {pooled.get('close_reasons')}")
 
 
-def _instance_and_frames(strategy_id: str, since: datetime | None):
+def _symbols(cfg, symbol: str | None) -> list[str] | None:
+    """None: the instance's own symbol. 'all': every configured symbol. Otherwise a comma list."""
+    if not symbol:
+        return None
+    if symbol.lower() == "all":
+        return list(cfg.symbols)
+    return [s.strip().upper() for s in symbol.split(",") if s.strip()]
+
+
+def _instance_and_frames(strategy_id: str, since: datetime | None, symbol: str | None = None):
     """Config, instance and (entry, regime, range) candle frames for the walk-forward style commands."""
-    from .backtest.runner import load_frames
+    from .backtest.runner import instance_for, load_frames
     from .config import load_config
     from .settings import settings
 
     cfg = load_config(settings.strategy_config_path)
-    inst = next((s for s in cfg.strategies if s.id == strategy_id), None)
-    if inst is None:
-        raise typer.BadParameter(f"unknown strategy id {strategy_id!r}; known: {[s.id for s in cfg.strategies]}")
+    try:
+        inst = instance_for(cfg, strategy_id, symbol)
+    except ValueError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     return cfg, inst, load_frames(cfg, inst, since, None)
 
 
@@ -98,16 +125,40 @@ def walkforward(
     since: datetime = typer.Option(None),
     train_days: int = typer.Option(180),
     test_days: int = typer.Option(60),
+    symbol: str = typer.Option(None, help="Run the instance on another symbol, a comma list, or 'all' (every configured symbol)"),
 ) -> None:
     """Rolling walk-forward over the strategy's small parameter grid; prints out-of-sample metrics only."""
+    import pandas as pd
+
+    from .backtest.metrics import compute_metrics
     from .backtest.walkforward import walk_forward
+    from .config import load_config
+    from .settings import settings
     from .strategies.base import strategy_class
 
-    cfg, inst, (entry_df, regime_df, range_df) = _instance_and_frames(strategy_id, since)
-    cls = strategy_class(inst.type)
-    res = walk_forward(cfg, inst, entry_df, regime_df, cls.WALK_FORWARD_GRID, cls.WALK_FORWARD_EXIT_GRID,
-                       train_days=train_days, test_days=test_days, range_df=range_df)
-    _print_windows(res)
+    symbols = _symbols(load_config(settings.strategy_config_path), symbol)
+    oos_frames = []
+    for sym in symbols or [None]:
+        cfg, inst, (entry_df, regime_df, range_df) = _instance_and_frames(strategy_id, since, sym)
+        if entry_df.empty or regime_df.empty:
+            console.print(f"[yellow]{sym}: no candles[/]")
+            continue
+        cls = strategy_class(inst.type)
+        res = walk_forward(cfg, inst, entry_df, regime_df, cls.WALK_FORWARD_GRID, cls.WALK_FORWARD_EXIT_GRID,
+                           train_days=train_days, test_days=test_days, range_df=range_df)
+        if symbols is None:
+            _print_windows(res)
+            return
+        m = res["oos"]
+        console.print(f"{sym:10} OOS trades {m.get('trades', 0):4d}  win {m.get('win_rate') or 0:.0%}  exp {m.get('expectancy_r') or 0:+.3f}R  "
+                      f"sum {m.get('sum_r') or 0:+.1f}R  max DD {m.get('max_drawdown_r') or 0}R  "
+                      f"picked {[w['params'] for w in res['windows'][-3:]]}")
+        if not res["oos_trades"].empty:
+            oos_frames.append(res["oos_trades"])
+    pooled = compute_metrics(pd.concat(oos_frames), 0, 0, 1) if oos_frames else {"trades": 0}
+    console.print(f"[bold]pooled out-of-sample ({len(oos_frames)} symbols with trades):[/] trades {pooled.get('trades', 0)}  "
+                  f"win {pooled.get('win_rate') or 0:.0%}  exp {pooled.get('expectancy_r') or 0:+.3f}R  sum {pooled.get('sum_r') or 0:+.1f}R  "
+                  f"max DD {pooled.get('max_drawdown_r')}R  profit factor {pooled.get('profit_factor')}")
 
 
 @app.command()
@@ -276,6 +327,39 @@ def explain(
     console.print(f"{len(df):,} labelled bars from {len(files)} files")
     path = report(df, side, tf, p.tag, min_n, REPO_ROOT / out)
     console.print(f"[green]report -> {path}[/]")
+
+
+@app.command()
+def forward(
+    tf: str = typer.Option("15m"),
+    side: str = typer.Option("long", help="long | short"),
+    stop_atr: float = typer.Option(1.0),
+    target_atr: float = typer.Option(2.0),
+    max_bars: int = typer.Option(24),
+    test_from: str = typer.Option("2024-01-01", help="First day of the out-of-sample years"),
+    min_n: int = typer.Option(3000, help="Minimum training bars in a bucket before it becomes a rule"),
+    data: str = typer.Option("data/research"),
+    out: str = typer.Option("docs/research"),
+) -> None:
+    """Step 3: mine rules on the training years, score them (and a model ceiling) on the test years."""
+    import pandas as pd
+
+    from .forward import report, run
+    from .labels import LabelParams
+    from .settings import REPO_ROOT
+
+    p = LabelParams(side=side, stop_atr=stop_atr, target_atr=target_atr, max_bars=max_bars)
+    files = sorted((REPO_ROOT / data).glob(f"*_{tf}_{p.tag}.parquet"))
+    if not files:
+        raise typer.BadParameter(f"no label files for {tf} {p.tag} in {data}; run `research label` first")
+    df = pd.concat([pd.read_parquet(f) for f in files])
+    console.print(f"{len(df):,} labelled bars from {len(files)} files; fitting…")
+    res = run(df, tf, test_from, min_n)
+    path = report(res, side, tf, p.tag, test_from, REPO_ROOT / out)
+    passing = [s for s in res.rules + res.model if s.passes]
+    robust = [s for s in passing if s.robust]
+    verdict = f"[bold green]{len(passing)} PASS, {len(robust)} ROBUST[/]" if passing else "[yellow]nothing passes[/]"
+    console.print(f"[green]report -> {path}[/]  {verdict}")
 
 
 @app.command()

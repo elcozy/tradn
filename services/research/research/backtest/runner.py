@@ -62,10 +62,23 @@ def load_frames(
     return entry_df, regime_df, range_df
 
 
-def run_backtest(cfg: AppConfig, strategy_id: str, since: datetime | None, until: datetime | None, save: bool = True) -> BacktestResult:
+def instance_for(cfg: AppConfig, strategy_id: str, symbol: str | None = None) -> StrategyInstance:
+    """The configured instance, or a copy of it on another symbol (id `<strategy_id>@<symbol>`) so one
+    instance can be backtested across the whole symbol list without configuring it everywhere."""
     inst = next((s for s in cfg.strategies if s.id == strategy_id), None)
     if inst is None:
         raise ValueError(f"unknown strategy id {strategy_id}")
+    if symbol and symbol != inst.symbol:
+        if symbol not in cfg.symbols:
+            raise ValueError(f"{symbol} is not in the config's symbols list")
+        inst = inst.model_copy(update={"symbol": symbol, "id": f"{strategy_id}@{symbol}"})
+    return inst
+
+
+def run_backtest(
+    cfg: AppConfig, strategy_id: str, since: datetime | None, until: datetime | None, save: bool = True, symbol: str | None = None
+) -> BacktestResult:
+    inst = instance_for(cfg, strategy_id, symbol)
     since = since.replace(tzinfo=since.tzinfo or timezone.utc) if since else None
     until = until.replace(tzinfo=until.tzinfo or timezone.utc) if until else None
     entry_df, regime_df, range_df = load_frames(cfg, inst, since, until)
@@ -84,7 +97,22 @@ def run_backtest(cfg: AppConfig, strategy_id: str, since: datetime | None, until
     run_id = f"bt_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{uuid.uuid4().hex[:6]}"
     if save:
         _save(run_id, inst, out, trades, metrics, baselines)
-    return BacktestResult(run_id, strategy_id, metrics, baselines, out.skip_reasons, trades)
+    return BacktestResult(run_id, inst.id, metrics, baselines, out.skip_reasons, trades)
+
+
+def pooled_summary(results: dict[str, BacktestResult]) -> tuple[pd.DataFrame, dict]:
+    """One row per symbol plus the pooled metrics of every trade, for `--symbol all` runs."""
+    rows = []
+    frames = []
+    for sym, r in results.items():
+        m = r.metrics
+        rows.append({"symbol": sym, "trades": m.get("trades", 0), "win_rate": m.get("win_rate"), "expectancy_r": m.get("expectancy_r"),
+                     "sum_r": m.get("sum_r"), "max_dd_r": m.get("max_drawdown_r"), "avg_bars": m.get("avg_bars_held")})
+        if not r.trades.empty:
+            frames.append(r.trades)
+    table = pd.DataFrame(rows)
+    pooled = compute_metrics(pd.concat(frames), 0, 0, 1) if frames else {"trades": 0}
+    return table, pooled
 
 
 def _save(run_id, inst, out, trades: pd.DataFrame, metrics, baselines) -> None:

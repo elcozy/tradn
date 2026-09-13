@@ -37,7 +37,7 @@ class Candidate:
     base: str
     avg_volume_usd: float  # mean daily quote volume over the lookback
     spread_pct: float  # (ask - bid) / mid * 100
-    history_days: int  # closed daily candles available in the lookback window
+    history_days: int  # closed daily candles available, counted up to max(lookback_days, min_age_days)
 
 
 @dataclass
@@ -59,8 +59,8 @@ def select(kept: list[str], candidates: list[Candidate], u: UniverseConfig) -> S
             continue
         if c.base in u.exclude:
             rejected.append((c, "excluded"))
-        elif c.history_days < u.lookback_days:
-            rejected.append((c, f"only {c.history_days}d of history"))
+        elif c.history_days < max(u.lookback_days, u.min_age_days):
+            rejected.append((c, f"only {c.history_days}d of history (min {max(u.lookback_days, u.min_age_days)})"))
         elif c.avg_volume_usd < u.min_volume_usd:
             rejected.append((c, f"volume {c.avg_volume_usd / 1e6:.1f}M < {u.min_volume_usd / 1e6:.0f}M"))
         elif c.spread_pct > u.max_spread_pct:
@@ -158,10 +158,11 @@ def scan(ex: Market, u: UniverseConfig, sleep: bool = True) -> list[Candidate]:
         if (t.get("quoteVolume") or 0) < u.min_volume_usd / 4:
             continue
         symbol = m["id"]
-        kl = ex.publicGetKlines({"symbol": symbol, "interval": "1d", "limit": u.lookback_days + 1})
+        need = max(u.lookback_days, u.min_age_days)  # enough daily bars to measure both volume and listing age
+        kl = ex.publicGetKlines({"symbol": symbol, "interval": "1d", "limit": min(need + 1, 1000)})
         closed = [k for k in kl if int(k[6]) < int(time.time() * 1000)]  # drop the forming day
-        closed = closed[-u.lookback_days :]
-        avg = sum(float(k[7]) for k in closed) / len(closed) if closed else 0.0
+        recent = closed[-u.lookback_days :]
+        avg = sum(float(k[7]) for k in recent) / len(recent) if recent else 0.0
         b = book.get(symbol)
         bid, ask = (float(b["bidPrice"]), float(b["askPrice"])) if b else (0.0, 0.0)
         spread = (ask - bid) / ((ask + bid) / 2) * 100 if bid > 0 and ask > 0 else 999.0

@@ -37,22 +37,41 @@ class Condition:
     years_positive: float  # fraction of years with positive expectancy in this bucket
 
 
-def bucketize(df: pd.DataFrame) -> pd.DataFrame:
-    """Add a `<feature>__b` string column per feature: quantile bins (pooled edges) or the category."""
+Edges = dict[str, np.ndarray]
+
+
+def fit_edges(df: pd.DataFrame) -> Edges:
+    """Quantile bin edges per continuous feature, from this data set (the training years in forward tests)."""
+    edges: Edges = {}
+    for feat, kind in FEATURES.items():
+        if feat not in df or kind != "q":
+            continue
+        try:
+            _, bins = pd.qcut(df[feat], N_BINS, duplicates="drop", retbins=True)
+        except ValueError:
+            continue
+        bins[0], bins[-1] = -np.inf, np.inf  # outer bins take anything the edges did not see
+        edges[feat] = bins
+    return edges
+
+
+def apply_edges(df: pd.DataFrame, edges: Edges) -> pd.DataFrame:
+    """Add a `<feature>__b` string column per feature: the quantile bin (from `edges`) or the category."""
     out = df.copy()
     for feat, kind in FEATURES.items():
         if feat not in df:
             continue
-        s = df[feat]
         if kind == "cat":
-            out[f"{feat}__b"] = s.map(lambda x: "nan" if pd.isna(x) else f"{x:g}")
-            continue
-        try:
-            q = pd.qcut(s, N_BINS, duplicates="drop")
-        except ValueError:
-            continue
-        out[f"{feat}__b"] = q.map(lambda iv: "nan" if pd.isna(iv) else f"{iv.left:.3g}..{iv.right:.3g}").astype(str)
+            out[f"{feat}__b"] = df[feat].map(lambda x: "nan" if pd.isna(x) else f"{x:g}")
+        elif feat in edges:
+            q = pd.cut(df[feat], edges[feat], include_lowest=True)
+            out[f"{feat}__b"] = q.map(lambda iv: "nan" if pd.isna(iv) else f"{iv.left:.3g}..{iv.right:.3g}").astype(str)
     return out
+
+
+def bucketize(df: pd.DataFrame) -> pd.DataFrame:
+    """Bucket a data set on its own quantiles (descriptive reports)."""
+    return apply_edges(df, fit_edges(df))
 
 
 def _stats(g: pd.DataFrame, base: float, total: int) -> dict:
@@ -146,9 +165,10 @@ def report(df: pd.DataFrame, side: str, tf: str, params_tag: str, min_n: int, ou
     md += ["", "## Per year", "", "| year | bars | exp R |", "|---|---|---|"]
     md += [f"| {y} | {int(r['count']):,} | {r['mean']:+.3f} |" for y, r in per_year.iterrows()]
     md += ["", "_Descriptive, in-sample. Candidates go through `research walkforward` / `optimize` before they become a strategy._", ""]
-    path = out_dir / f"explain_{tf}_{side}.md"
+    stem = f"explain_{tf}_{params_tag}"  # the tag already carries the side
+    path = out_dir / f"{stem}.md"
     path.write_text("\n".join(md), encoding="utf-8")
-    single.to_csv(out_dir / f"explain_{tf}_{side}_conditions.csv", index=False)
+    single.to_csv(out_dir / f"{stem}_conditions.csv", index=False)
     if not pairs.empty:
-        pairs.to_csv(out_dir / f"explain_{tf}_{side}_pairs.csv", index=False)
+        pairs.to_csv(out_dir / f"{stem}_pairs.csv", index=False)
     return path

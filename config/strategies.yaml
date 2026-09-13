@@ -3,7 +3,7 @@
 # Changing a timeframe or parameter is a config edit + restart, never a code change.
 
 mode: shadow
-symbols: [BTCUSDT, BNBUSDT, SOLUSDT, XRPUSDT, DOGEUSDT, ADAUSDT, TRXUSDT, LINKUSDT, AVAXUSDT, XLMUSDT, SHIBUSDT, ENAUSDT, C98USDT, ALICEUSDT, ETHUSDT, ZECUSDT, SUIUSDT, UNIUSDT, NEARUSDT, XPLUSDT, PUMPUSDT, UUSDT, WLDUSDT, TAOUSDT, DASHUSDT, LTCUSDT, AAVEUSDT, ALLOUSDT, BCHUSDT, ONDOUSDT, PENGUUSDT]
+symbols: [BTCUSDT, BNBUSDT, SOLUSDT, XRPUSDT, DOGEUSDT, ADAUSDT, TRXUSDT, LINKUSDT, AVAXUSDT, XLMUSDT, SHIBUSDT, ENAUSDT, C98USDT, ALICEUSDT, ETHUSDT, ZECUSDT, SUIUSDT, UNIUSDT, NEARUSDT, PUMPUSDT, WLDUSDT, TAOUSDT, DASHUSDT, LTCUSDT, AAVEUSDT, BCHUSDT, ONDOUSDT, PENGUUSDT]
 chart_timeframes: [1m]
 chart_lookback_days: 30
 # Symbol universe (research universe --apply): `pinned` and every symbol with a hand-written instance are
@@ -15,6 +15,7 @@ universe:
   min_volume_usd: 10000000
   max_spread_pct: 0.05
   lookback_days: 30
+  min_age_days: 365  # never auto-add a pair listed less than a year ago: new listings trade differently and lost in every backtest
   max_symbols: 50
   # never traded: stablecoins and fiat, gold, wrapped / staked duplicates of coins already in the list
   exclude: [USDC, FDUSD, TUSD, USDP, DAI, BUSD, USD1, USDE, USDS, FRAX, RLUSD, BFUSD, XUSD, AEUR, EUR, EURI, PAXG, XAUT,
@@ -240,8 +241,153 @@ strategies:
     atr_len: 14, min_range_atr: 3.0, entry_zone_pct: 20, tp_zone_pct: 80, stop_atr_k: 0.5, ladder: 1,
     max_risk_pct: 1.5, min_r: 1.0, max_fee_r: 0.5}
   exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: null}
+# S4 (dump_bounce): the day-trading rule from the pattern research (PLAN.md "Pattern research findings"). No trend
+# filter: the dump is the regime. Two modes:
+#   mode: dump          own return over ret_bars (96 x 15m = 24h) at or below ret_max_pct, ATR >= atr_min_pct of price
+#   mode: crash_bounce  close at least dd_max_pct below its dd_days-day high and bounce_min_pct above its bounce_bars-bar low
+#   stop_atr_k / r_mult stop = entry - stop_atr_k x ATR, target = entry + r_mult x risk
+#   max_risk_pct        wide on purpose: a 2 ATR stop on a coin with ATR > 2% is a 4%+ stop
+# exit: pure barrier as in the research (no partial TP1, no breakeven, no trailing), max_bars 96 = closed within 24h.
+# Enabled in shadow for the 14 pinned coins on 2026-09-13 after the backtest and walk-forward on every symbol were positive
+# (PLAN.md); s4b (crash_bounce) stays disabled, it failed. Re-check with
+#   research backtest s4_btc_15m --symbol all --since 2024-01-01
+- id: s4_btc_15m
+  type: dump_bounce
+  symbol: BTCUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {mode: dump, ret_bars: 96, ret_max_pct: -5.0, atr_len: 14, atr_min_pct: 2.0, stop_atr_k: 2.0, r_mult: 2.0,
+    max_risk_pct: 12.0, max_fee_r: 0.25}
+  exit: {tp1_r: 2.0, tp1_fraction: 0.0, breakeven_r: 99.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: 96}
+- id: s4_bnb_15m
+  type: dump_bounce
+  symbol: BNBUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {mode: dump, ret_bars: 96, ret_max_pct: -5.0, atr_len: 14, atr_min_pct: 2.0, stop_atr_k: 2.0, r_mult: 2.0,
+    max_risk_pct: 12.0, max_fee_r: 0.25}
+  exit: {tp1_r: 2.0, tp1_fraction: 0.0, breakeven_r: 99.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: 96}
+- id: s4_sol_15m
+  type: dump_bounce
+  symbol: SOLUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {mode: dump, ret_bars: 96, ret_max_pct: -5.0, atr_len: 14, atr_min_pct: 2.0, stop_atr_k: 2.0, r_mult: 2.0,
+    max_risk_pct: 12.0, max_fee_r: 0.25}
+  exit: {tp1_r: 2.0, tp1_fraction: 0.0, breakeven_r: 99.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: 96}
+- id: s4_xrp_15m
+  type: dump_bounce
+  symbol: XRPUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {mode: dump, ret_bars: 96, ret_max_pct: -5.0, atr_len: 14, atr_min_pct: 2.0, stop_atr_k: 2.0, r_mult: 2.0,
+    max_risk_pct: 12.0, max_fee_r: 0.25}
+  exit: {tp1_r: 2.0, tp1_fraction: 0.0, breakeven_r: 99.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: 96}
+- id: s4_doge_15m
+  type: dump_bounce
+  symbol: DOGEUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {mode: dump, ret_bars: 96, ret_max_pct: -5.0, atr_len: 14, atr_min_pct: 2.0, stop_atr_k: 2.0, r_mult: 2.0,
+    max_risk_pct: 12.0, max_fee_r: 0.25}
+  exit: {tp1_r: 2.0, tp1_fraction: 0.0, breakeven_r: 99.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: 96}
+- id: s4_ada_15m
+  type: dump_bounce
+  symbol: ADAUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {mode: dump, ret_bars: 96, ret_max_pct: -5.0, atr_len: 14, atr_min_pct: 2.0, stop_atr_k: 2.0, r_mult: 2.0,
+    max_risk_pct: 12.0, max_fee_r: 0.25}
+  exit: {tp1_r: 2.0, tp1_fraction: 0.0, breakeven_r: 99.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: 96}
+- id: s4_trx_15m
+  type: dump_bounce
+  symbol: TRXUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {mode: dump, ret_bars: 96, ret_max_pct: -5.0, atr_len: 14, atr_min_pct: 2.0, stop_atr_k: 2.0, r_mult: 2.0,
+    max_risk_pct: 12.0, max_fee_r: 0.25}
+  exit: {tp1_r: 2.0, tp1_fraction: 0.0, breakeven_r: 99.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: 96}
+- id: s4_link_15m
+  type: dump_bounce
+  symbol: LINKUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {mode: dump, ret_bars: 96, ret_max_pct: -5.0, atr_len: 14, atr_min_pct: 2.0, stop_atr_k: 2.0, r_mult: 2.0,
+    max_risk_pct: 12.0, max_fee_r: 0.25}
+  exit: {tp1_r: 2.0, tp1_fraction: 0.0, breakeven_r: 99.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: 96}
+- id: s4_avax_15m
+  type: dump_bounce
+  symbol: AVAXUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {mode: dump, ret_bars: 96, ret_max_pct: -5.0, atr_len: 14, atr_min_pct: 2.0, stop_atr_k: 2.0, r_mult: 2.0,
+    max_risk_pct: 12.0, max_fee_r: 0.25}
+  exit: {tp1_r: 2.0, tp1_fraction: 0.0, breakeven_r: 99.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: 96}
+- id: s4_xlm_15m
+  type: dump_bounce
+  symbol: XLMUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {mode: dump, ret_bars: 96, ret_max_pct: -5.0, atr_len: 14, atr_min_pct: 2.0, stop_atr_k: 2.0, r_mult: 2.0,
+    max_risk_pct: 12.0, max_fee_r: 0.25}
+  exit: {tp1_r: 2.0, tp1_fraction: 0.0, breakeven_r: 99.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: 96}
+- id: s4_shib_15m
+  type: dump_bounce
+  symbol: SHIBUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {mode: dump, ret_bars: 96, ret_max_pct: -5.0, atr_len: 14, atr_min_pct: 2.0, stop_atr_k: 2.0, r_mult: 2.0,
+    max_risk_pct: 12.0, max_fee_r: 0.25}
+  exit: {tp1_r: 2.0, tp1_fraction: 0.0, breakeven_r: 99.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: 96}
+- id: s4_ena_15m
+  type: dump_bounce
+  symbol: ENAUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {mode: dump, ret_bars: 96, ret_max_pct: -5.0, atr_len: 14, atr_min_pct: 2.0, stop_atr_k: 2.0, r_mult: 2.0,
+    max_risk_pct: 12.0, max_fee_r: 0.25}
+  exit: {tp1_r: 2.0, tp1_fraction: 0.0, breakeven_r: 99.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: 96}
+- id: s4_c98_15m
+  type: dump_bounce
+  symbol: C98USDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {mode: dump, ret_bars: 96, ret_max_pct: -5.0, atr_len: 14, atr_min_pct: 2.0, stop_atr_k: 2.0, r_mult: 2.0,
+    max_risk_pct: 12.0, max_fee_r: 0.25}
+  exit: {tp1_r: 2.0, tp1_fraction: 0.0, breakeven_r: 99.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: 96}
+- id: s4_alice_15m
+  type: dump_bounce
+  symbol: ALICEUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: true
+  params: {mode: dump, ret_bars: 96, ret_max_pct: -5.0, atr_len: 14, atr_min_pct: 2.0, stop_atr_k: 2.0, r_mult: 2.0,
+    max_risk_pct: 12.0, max_fee_r: 0.25}
+  exit: {tp1_r: 2.0, tp1_fraction: 0.0, breakeven_r: 99.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: 96}
+- id: s4b_btc_15m
+  type: dump_bounce
+  symbol: BTCUSDT
+  entry_tf: 15m
+  regime_tf: 1h
+  enabled: false
+  params: {mode: crash_bounce, dd_days: 30, dd_max_pct: -35.0, bounce_bars: 20, bounce_min_pct: 5.0, atr_len: 14, atr_min_pct: 0.0,
+    stop_atr_k: 2.0, r_mult: 2.0, max_risk_pct: 12.0, max_fee_r: 0.25}
+  exit: {tp1_r: 2.0, tp1_fraction: 0.0, breakeven_r: 99.0, trail_atr_k: null, tp_ratchet_atr: null, fee_pct: 0.1, max_bars: 96}
 # --- UNIVERSE: auto-generated by `research universe`, do not edit by hand ---
-# refreshed 2026-09-13 01:02 UTC
+# refreshed 2026-09-13 09:53 UTC
 - id: s1_eth_15m
   type: sr_bounce
   symbol: ETHUSDT
@@ -282,25 +428,9 @@ strategies:
   enabled: true
   params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5, touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1, max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
   exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
-- id: s1_xpl_15m
-  type: sr_bounce
-  symbol: XPLUSDT
-  entry_tf: 15m
-  regime_tf: 1h
-  enabled: true
-  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5, touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1, max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
-  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
 - id: s1_pump_15m
   type: sr_bounce
   symbol: PUMPUSDT
-  entry_tf: 15m
-  regime_tf: 1h
-  enabled: true
-  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5, touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1, max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
-  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
-- id: s1_u_15m
-  type: sr_bounce
-  symbol: UUSDT
   entry_tf: 15m
   regime_tf: 1h
   enabled: true
@@ -341,14 +471,6 @@ strategies:
 - id: s1_aave_15m
   type: sr_bounce
   symbol: AAVEUSDT
-  entry_tf: 15m
-  regime_tf: 1h
-  enabled: true
-  params: {swing_width: 5, level_tolerance_pct: 0.25, level_min_touches: 2, level_lookback_days: 30, level_break_pct: 0.5, touch_pct: 0.3, wick_min_pct: 50, rsi_len: 14, rsi_max: 45, atr_len: 14, stop_below_level_pct: 0.25, stop_atr_buffer: 0.1, max_risk_pct: 1.5, min_r: 1.5, max_fee_r: 0.25, invalidation_pct: 0.0}
-  exit: {tp1_r: 1.0, tp1_fraction: 0.5, breakeven_r: 1.0, trail_atr_k: 2.0, tp_ratchet_atr: 1.0, fee_pct: 0.1, max_bars: null}
-- id: s1_allo_15m
-  type: sr_bounce
-  symbol: ALLOUSDT
   entry_tf: 15m
   regime_tf: 1h
   enabled: true

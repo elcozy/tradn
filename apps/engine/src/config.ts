@@ -105,6 +105,7 @@ export const AppConfigSchema = z
         min_volume_usd: z.number().default(10_000_000),
         max_spread_pct: z.number().default(0.05),
         lookback_days: z.number().int().default(30),
+        min_age_days: z.number().int().default(365),
         max_symbols: z.number().int().default(50),
         exclude: z.array(z.string()).default([]),
         template: z.string().default("s1_btc_15m"),

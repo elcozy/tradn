@@ -85,7 +85,7 @@ def walk_forward(
     test_trades: list[pd.DataFrame] = []
     per_window = []
     for w in wins:
-        best, best_score = None, -1e9
+        best, best_score = combos[0], float("-inf")  # a train window with no trades at all keeps the first combo
         train = slice_frames(cfg, instance, w.train_start, w.train_end, entry_df, regime_df, range_df)
         for params, ex in combos:
             m, _ = evaluate(cfg, with_params(instance, params, ex), train, w.train_start, train_days)

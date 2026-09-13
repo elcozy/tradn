@@ -17,7 +17,7 @@ from research.universe import (
     select,
 )
 
-U = UniverseConfig(pinned=["BTCUSDT"], min_volume_usd=10e6, max_spread_pct=0.05, lookback_days=30, max_symbols=4, exclude=["USDC"])
+U = UniverseConfig(pinned=["BTCUSDT"], min_volume_usd=10e6, max_spread_pct=0.05, lookback_days=30, min_age_days=30, max_symbols=4, exclude=["USDC"])
 
 
 def cand(symbol, vol, spread=0.01, days=30):
@@ -38,6 +38,13 @@ def test_select_keeps_pinned_and_filters_by_every_bar():
     assert "spread" in reasons["WIDEUSDT"]
     assert "volume" in reasons["THINUSDT"]
     assert "max_symbols" in reasons["SUIUSDT"] and "max_symbols" in reasons["TONUSDT"]
+
+
+def test_select_rejects_pairs_listed_less_than_min_age_days_ago():
+    u = U.model_copy(update={"min_age_days": 365})
+    sel = select(["BTCUSDT"], [cand("OLDUSDT", 50e6, days=365), cand("YOUNGUSDT", 80e6, days=200)], u)
+    assert [c.symbol for c in sel.added] == ["OLDUSDT"]
+    assert {c.symbol: why for c, why in sel.rejected}["YOUNGUSDT"] == "only 200d of history (min 365)"
 
 
 def test_render_copies_the_template_per_symbol(repo_root):
@@ -107,8 +114,9 @@ class FakeMarket:
     def publicGetKlines(self, params):
         vol = {"BTCUSDT": 500e6, "ZZZUSDT": 150e6}[params["symbol"]]
         day = 86_400_000
-        # 31 candles, the last one still forming
-        return [[self.now - (31 - i) * day, "0", "0", "0", "0", "0", self.now - (30 - i) * day - 1, str(vol), 0, "0", "0", "0"] for i in range(31)]
+        n = int(params.get("limit", 31))  # `limit` candles; the last one opened just now and is still forming
+        opens = [self.now - (n - 1 - i) * day for i in range(n)]
+        return [[o, "0", "0", "0", "0", "0", o + day - 1, str(vol), 0, "0", "0", "0"] for o in opens]
 
 
 def test_scan_measures_lookback_volume_and_spread():

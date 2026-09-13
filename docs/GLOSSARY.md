@@ -63,6 +63,10 @@ Example: 0.1% × (65,994.98 + 65,866.03) = 131.86 USDT = **1.02 R** — on a 1-A
 
 **OOS — out of sample.** Results on data the rule was *not* designed or tuned on. Only OOS numbers count.
 
+**PASS / ROBUST (forward-test reports)** — PASS: positive OOS expectancy on at least 300 trades. ROBUST: PASS and positive in every test year and in at least 60% of coins. With 35 rules tried per report, about two would PASS by luck alone; ROBUST is the bar that matters.
+
+**Non-overlapping trades** — how forward tests count trades: a coin cannot enter again while its previous trade is still open, so the trade count is what could actually have been taken, not one per bar.
+
 **Walk-forward** — optimise parameters on a training window, test on the following window, slide forward, report only the test windows stitched together.
 
 **Look-ahead (bias)** — using information that was not available at the time of the decision. The most common way a backtest lies. Features are computed only from bars up to and including the current one; labels use the future on purpose and are never features.

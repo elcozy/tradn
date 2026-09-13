@@ -83,6 +83,7 @@ class UniverseConfig(BaseModel):
     min_volume_usd: float = 10_000_000  # average daily quote volume over lookback_days
     max_spread_pct: float = 0.05  # best bid/ask spread at refresh time
     lookback_days: int = 30
+    min_age_days: int = 365  # a pair listed more recently than this is never auto-added (new listings trade differently)
     max_symbols: int = 50  # pinned + auto-added, sorted by volume
     exclude: list[str] = Field(default_factory=list)  # base assets never traded (stablecoins, wrapped coins, ...)
     template: str = "s1_btc_15m"  # instance copied for every auto-added symbol
